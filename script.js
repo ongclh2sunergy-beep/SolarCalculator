@@ -1,24 +1,21 @@
 function calculateSolar() {
     const bill = parseFloat(document.getElementById('bill').value);
-  
     if (isNaN(bill) || bill <= 0) {
       alert("Please enter a valid bill amount.");
       return;
     }
   
-    // Constants
-    const tariff = 0.50; // MYR per kWh
-    const sunlightHours = 4; // avg per day
-    const costPerKW = 5000; // MYR per kW
-    const panelWatt = 550; // W
-    const systemLife = 25; // years
+    const tariff = 0.50;
+    const sunlightHours = 4;
+    const costPerKW = 5000;
+    const panelWatt = 550;
+    const systemLife = 25;
   
-    // Calculations
     const monthlyUsageKWh = bill / tariff;
     const recommendedKW = (monthlyUsageKWh) / (sunlightHours * 30);
     const panelsNeeded = Math.ceil(recommendedKW * 1000 / panelWatt);
     const installCost = recommendedKW * costPerKW;
-    const monthlySavings = bill; // Assuming 100% offset
+    const monthlySavings = bill;
     const yearlySavings = monthlySavings * 12;
     const payback = installCost / yearlySavings;
     const lifetimeSavings = yearlySavings * systemLife;
@@ -27,7 +24,6 @@ function calculateSolar() {
     const monthlyGen = annualGen / 12;
     const offsetPercent = Math.min(100, (monthlyGen * tariff) / bill * 100);
   
-    // Display
     document.getElementById('results').innerHTML = `
       <p><strong>Recommended Solar Capacity:</strong> ${recommendedKW.toFixed(2)} kW</p>
       <p><strong>Suggested Number of Panels:</strong> ${panelsNeeded} panels (550W each)</p>

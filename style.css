@@ -1,40 +1,11 @@
 body {
-    font-family: Arial, sans-serif;
-    background: #f0f8ff;
-    padding: 20px;
+    scroll-behavior: smooth;
   }
   
-  .container {
-    max-width: 500px;
-    margin: auto;
-    background: #fff;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  section {
+    padding-top: 60px;
   }
   
-  input {
-    width: 100%;
-    padding: 10px;
-    margin: 10px 0;
-  }
-  
-  button {
-    padding: 10px 20px;
-    background: #007acc;
-    color: #fff;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  
-  button:hover {
-    background: #005fa3;
-  }
-  
-  .results {
-    margin-top: 20px;
-    background: #e6f7ff;
-    padding: 10px;
-    border-radius: 8px;
+  #results p {
+    margin-bottom: 5px;
   }
