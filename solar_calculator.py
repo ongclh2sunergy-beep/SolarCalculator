@@ -91,7 +91,7 @@ def main():
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Estimated Installation Cost:</strong><br> MYR {install_cost:,.0f}
                 </div>
             """, unsafe_allow_html=True)
