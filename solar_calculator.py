@@ -48,7 +48,15 @@ def main():
         recommended_kw = monthly_usage_kwh / (sunlight_hours * 30)
 
         # Calculate number of panels (convert kW to watts, divide by panel size).
-        panels_needed = int(-(-recommended_kw * 1000 // panel_watt))  # ceil without math.ceil
+        # Calculate as usual
+        raw_panels_needed = int(-(-recommended_kw * 1000 // panel_watt))  # ceil without math.ceil
+
+        # Allowed sizes
+        allowed_panels = [10, 14, 20, 30, 40]
+
+        # Find the smallest allowed that is >= raw_panels_needed
+        panels_needed = next((p for p in allowed_panels if p >= raw_panels_needed), allowed_panels[-1])
+        # panels_needed = int(-(-recommended_kw * 1000 // panel_watt))  # ceil without math.ceil
 
         # Total installation cost for the recommended kW.
         install_cost = recommended_kw * cost_per_kw
