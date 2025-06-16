@@ -4,7 +4,12 @@ def main():
     st.title("☀️ Solar Savings Calculator")
 
     st.write("Enter your average monthly electricity bill (MYR):")
-    bill = st.number_input("Monthly Bill (MYR)", min_value=0.0, step=10.0)
+    bill = st.number_input(
+    "Monthly Bill (MYR)",
+    min_value=0.0,
+    step=10.0,
+    placeholder="Key in your monthly bill"
+)
 
     if bill > 0:
         # Constants
