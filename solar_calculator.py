@@ -20,7 +20,7 @@ def main():
         # Proceed with your calculations using `bill`
         st.write(f"Your entered bill: MYR {bill:.2f}")
 
-    if bill > 0:
+    if bill > 0 and bill is not None:
         # Constants
         # Electricity cost in MYR per kWh (you pay RM0.50 for 1 kWh)
         tariff = 0.50
