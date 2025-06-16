@@ -25,6 +25,7 @@ def main():
         panel_watt = 615  # each panel output in watts
         system_life = 25  # system lifespan in years
 
+
         # Price table for each package (package price replaces cost per kW calculation)
         price_table = {
             10: 21000,
