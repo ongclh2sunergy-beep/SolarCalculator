@@ -79,69 +79,69 @@ def main():
 
         with col1:
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Recommended Solar Capacity:</strong><br> {recommended_kw:.2f} kW
                 </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Suggested Number of Panels:</strong><br> {panels_needed} panels
                 </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Estimated Installation Cost:</strong><br> MYR {install_cost:,.0f}
                 </div>
             """, unsafe_allow_html=True)
 
             if custom_price != "N/A":
                 st.markdown(f"""
-                    <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                    <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                     <strong>Package Price (for {panels_needed} panels):</strong><br> MYR {custom_price:,}
                     </div>
                 """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Estimated Monthly Savings:</strong><br> MYR {monthly_savings:.0f}
                 </div>
             """, unsafe_allow_html=True)
 
         with col2:
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Estimated Yearly Savings:</strong><br> MYR {yearly_savings:.0f}
                 </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Payback Period:</strong><br> {payback:.1f} years
                 </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Lifetime Savings (25 years):</strong><br> MYR {lifetime_savings:,.0f}
                 </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>ROI:</strong><br> {roi:.1f}%
                 </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Estimated Solar Generation:</strong><br> {annual_gen:.0f} kWh/year
                 </div>
             """, unsafe_allow_html=True)
 
             st.markdown(f"""
-                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <div style="border:1px solid rgba(255,255,255,0.2); padding:10px; border-radius:8px; background:rgba(0,0,0,0.2); color:inherit">
                 <strong>Bill Offset:</strong><br> {offset_percent:.1f}%
                 </div>
             """, unsafe_allow_html=True)
