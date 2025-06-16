@@ -8,24 +8,56 @@ def main():
 
     if bill > 0:
         # Constants
+        # Electricity cost in MYR per kWh (you pay RM0.50 for 1 kWh)
         tariff = 0.50
-        sunlight_hours = 4
+
+        # Average hours of useful sunlight per day
+        sunlight_hours = 3.42
+
+        # Installation cost estimate: RM5000 for each 1 kW of solar power capacity
         cost_per_kw = 5000
-        panel_watt = 550
+
+        # Each solar panel generates 615 watts 
+        panel_watt = 615
+
+        # The system is assumed to last 25 years
         system_life = 25
 
         # Calculation
+        # Your monthly energy use in kWh (bill ÷ price per kWh)
         monthly_usage_kwh = bill / tariff
+
+        # How many kW of solar capacity needed to match your monthly usage.
         recommended_kw = monthly_usage_kwh / (sunlight_hours * 30)
+
+        # Calculate number of panels (convert kW to watts, divide by panel size).
         panels_needed = int(-(-recommended_kw * 1000 // panel_watt))  # ceil without math.ceil
+
+        # Total installation cost for the recommended kW.
         install_cost = recommended_kw * cost_per_kw
+
+        # You save what you were paying — assumes solar offsets 100% of your bill.
         monthly_savings = bill
+
+        # Annual savings (monthly savings × 12).
         yearly_savings = monthly_savings * 12
+
+        # How many years to recover your investment.
         payback = install_cost / yearly_savings
+
+        # Total savings over 25 years.
         lifetime_savings = yearly_savings * system_life
+
+        # Return on investment (ROI %).
         roi = ((lifetime_savings - install_cost) / install_cost) * 100
+
+        # How much energy your system will produce yearly (kWh).
         annual_gen = recommended_kw * sunlight_hours * 365
+
+        # Average solar generation per month (kWh).
         monthly_gen = annual_gen / 12
+
+        # % of your bill that solar generation covers (capped at 100%).
         offset_percent = min(100, (monthly_gen * tariff) / bill * 100)
 
         # Price table
@@ -41,18 +73,78 @@ def main():
 
         # Results
         st.subheader("📊 Results")
-        st.write(f"**Recommended Solar Capacity:** {recommended_kw:.2f} kW")
-        st.write(f"**Suggested Number of Panels:** {panels_needed} panels")
-        st.write(f"**Estimated Installation Cost:** MYR {install_cost:,.0f}")
-        if custom_price != "N/A":
-            st.write(f"**Package Price (for {panels_needed} panels):** MYR {custom_price:,}")
-        st.write(f"**Estimated Monthly Savings:** MYR {monthly_savings:.0f}")
-        st.write(f"**Estimated Yearly Savings:** MYR {yearly_savings:.0f}")
-        st.write(f"**Payback Period:** {payback:.1f} years")
-        st.write(f"**Lifetime Savings (25 years):** MYR {lifetime_savings:,.0f}")
-        st.write(f"**ROI:** {roi:.1f}%")
-        st.write(f"**Estimated Solar Generation:** {annual_gen:.0f} kWh/year")
-        st.write(f"**Bill Offset:** {offset_percent:.1f}%")
+
+        # Show results in boxes using columns
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Recommended Solar Capacity:</strong><br> {recommended_kw:.2f} kW
+                </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Suggested Number of Panels:</strong><br> {panels_needed} panels
+                </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Estimated Installation Cost:</strong><br> MYR {install_cost:,.0f}
+                </div>
+            """, unsafe_allow_html=True)
+
+            if custom_price != "N/A":
+                st.markdown(f"""
+                    <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                    <strong>Package Price (for {panels_needed} panels):</strong><br> MYR {custom_price:,}
+                    </div>
+                """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Estimated Monthly Savings:</strong><br> MYR {monthly_savings:.0f}
+                </div>
+            """, unsafe_allow_html=True)
+
+        with col2:
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Estimated Yearly Savings:</strong><br> MYR {yearly_savings:.0f}
+                </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Payback Period:</strong><br> {payback:.1f} years
+                </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Lifetime Savings (25 years):</strong><br> MYR {lifetime_savings:,.0f}
+                </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>ROI:</strong><br> {roi:.1f}%
+                </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Estimated Solar Generation:</strong><br> {annual_gen:.0f} kWh/year
+                </div>
+            """, unsafe_allow_html=True)
+
+            st.markdown(f"""
+                <div style="border:1px solid #ccc;padding:10px;border-radius:8px;background:#f9f9f9">
+                <strong>Bill Offset:</strong><br> {offset_percent:.1f}%
+                </div>
+            """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
