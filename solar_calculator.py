@@ -4,12 +4,21 @@ def main():
     st.title("☀️ Solar Savings Calculator")
 
     st.write("Enter your average monthly electricity bill (MYR):")
-    bill = st.number_input(
-    "Monthly Bill (MYR)",
-    min_value=0.0,
-    step=10.0,
-    placeholder="Key in your monthly bill"
-)
+    bill_input = st.text_input("Monthly Bill (MYR)", placeholder="Key in your monthly bill")
+
+    bill = None
+    if bill_input:
+        try:
+            bill = float(bill_input)
+            if bill < 0:
+                st.error("Bill cannot be negative.")
+                bill = None
+        except ValueError:
+            st.error("Please enter a valid number.")
+
+    if bill is not None:
+        # Proceed with your calculations using `bill`
+        st.write(f"Your entered bill: MYR {bill:.2f}")
 
     if bill > 0:
         # Constants
