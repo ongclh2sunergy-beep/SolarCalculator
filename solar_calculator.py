@@ -16,11 +16,14 @@ def main():
         except ValueError:
             st.error("Please enter a valid number.")
 
-    if bill is not None:
-        # Proceed with your calculations using `bill`
-        st.write(f"Your entered bill: MYR {bill:.2f}")
+    if bill is not None and bill > 0:
+        # Your existing calculations go here
+        st.success(f"Processing bill: MYR {bill:.2f}")
+        # (put your solar savings logic and display results)
+    else:
+        st.info("Please enter your monthly bill to see the calculation.")
 
-    if bill > 0 and bill is not None:
+    if bill is not None and bill > 0:
         # Constants
         # Electricity cost in MYR per kWh (you pay RM0.50 for 1 kWh)
         tariff = 0.50
