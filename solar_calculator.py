@@ -49,19 +49,24 @@ def main():
         }
         allowed_panels = [10, 14, 20, 30, 40]
 
-        # === No-Sun Day Setting ===
-        st.subheader("🌧️ No-Sun Day Configuration")
-        no_sun_days = st.selectbox("Select how many days per month are cloudy or rainy (no full sun):", [0, 15, 30])
+        # === ADVANCED SETTINGS ===
+        # Default values
+        no_sun_days = 15
+        daytime_consumption_pct = 60
+
+        with st.expander("⚙️ Advanced Settings"):
+            st.subheader("🌧️ No-Sun Day Configuration")
+            no_sun_days = st.selectbox("Select how many days per month are cloudy or rainy (no full sun):", [0, 15, 30])
+
+            st.subheader("🔌 Daytime Electricity Consumption")
+            daytime_consumption_pct = st.slider("What % of your total electricity do you use during the day?", 0, 100, 60)
+
         sunny_days = 30 - no_sun_days
         adjusted_sunlight_hours = (
             (sunny_days * sunlight_hours + no_sun_days * sunlight_hours * 0.1) / 30
         )
 
-        # === Daytime Electricity Consumption ===
-        st.subheader("🔌 Daytime Electricity Consumption")
-        daytime_consumption_pct = st.slider("What % of your total electricity do you use during the day?", 0, 100, 60)
-
-        # === Package Selection Section ===
+        # === PACKAGE SELECTION ===
         st.subheader("📦 Solar Panel Package Selection")
         monthly_usage_kwh = bill / tariff
         recommended_kw = monthly_usage_kwh / (sunlight_hours * 30)
@@ -80,13 +85,12 @@ def main():
         annual_gen = chosen_kw * adjusted_sunlight_hours * 365
         monthly_gen = annual_gen / 12
 
-        # ✅ NEW: Calculate usable solar and unused solar
+        # === SAVINGS AND ENERGY CALCULATIONS ===
         daytime_consumption_kwh = monthly_usage_kwh * (daytime_consumption_pct / 100)
         usable_energy = min(monthly_gen, daytime_consumption_kwh)
         unused_solar = max(0, monthly_gen - usable_energy)
         actual_monthly_savings = min(bill, usable_energy * tariff)
 
-        # Savings and return calculations
         yearly_savings = actual_monthly_savings * 12
         payback = install_cost / yearly_savings if yearly_savings else 0
         lifetime_savings = yearly_savings * system_life
