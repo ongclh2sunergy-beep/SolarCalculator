@@ -242,7 +242,7 @@ def main():
 
         # Advanced settings
         with st.expander("⚙️ Advanced Settings"):
-            no_sun_days = st.selectbox("No-sun days per month:", [0,15,30], index=1)
+            no_sun_days = st.selectbox("No-sun days per month:", [0,15,30], index=0)
 
         # Panel selection
         allowed_panels = [10,14,20,30,40]
