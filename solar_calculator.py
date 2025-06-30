@@ -1,154 +1,6 @@
-# import streamlit as st
-
-# def main():
-#     st.title("☀️ Solar Savings Calculator")
-
-#     # Initialize session state
-#     if 'calc_trigger' not in st.session_state:
-#         st.session_state.calc_trigger = False
-
-#     # === FORM SECTION ===
-#     with st.form("solar_form"):
-#         bill_input = st.text_input("Enter your average monthly electricity bill (MYR):")
-#         submit = st.form_submit_button("Calculate Solar Savings")
-
-#     # === VALIDATION ===
-#     bill = None
-#     if bill_input:
-#         try:
-#             bill = float(bill_input)
-#             if bill < 0:
-#                 st.error("Bill cannot be negative.")
-#                 bill = None
-#         except ValueError:
-#             st.error("Please enter a valid number.")
-
-#     # Only set calc_trigger on submit
-#     if submit:
-#         if bill is None or bill <= 0:
-#             st.warning("Please enter a valid monthly bill greater than 0 to perform calculation.")
-#             st.session_state.calc_trigger = False
-#         else:
-#             if bill and bill > 0:
-#                 st.session_state.calc_trigger = True
-#                 st.session_state.bill = bill
-#             else:
-#                 st.session_state.calc_trigger = False
-
-#     # === MAIN CALCULATION & DISPLAY ===
-#     if st.session_state.calc_trigger:
-#         bill = st.session_state.bill
-
-#         # ─── Constants ───
-#         tariff = 0.63            # MYR per kWh
-#         sunlight_hours = 3.62    # avg sun hours/day
-#         panel_watt = 615         # W per panel
-#         system_life = 25         # years
-
-#         price_table = {10:21000, 14:26000, 20:34000, 30:43000, 40:52000}
-#         allowed_panels = [10, 14, 20, 30, 40]
-
-#         # ─── Advanced Settings ───
-#         with st.expander("⚙️ Advanced Settings"):
-#             st.subheader("🌧️ No-Sun Day Configuration")
-#             no_sun_days = st.selectbox("No-sun days per month:", [0, 15, 30], index=1)
-
-#         # Adjusted sunlight
-#         sunny_days = 30 - no_sun_days
-#         adjusted_sun = (sunny_days*sunlight_hours + no_sun_days*sunlight_hours*0.1) / 30
-
-#         # ─── Panel Package ───
-#         st.subheader("📦 Solar Panel Package Selection")
-#         monthly_kwh = bill / tariff
-#         rec_kw = monthly_kwh / (sunlight_hours * 30)
-#         raw_panels = int(-(-rec_kw*1000 // panel_watt))  # ceiling
-#         suggested = next((p for p in allowed_panels if p >= raw_panels), allowed_panels[-1])
-
-#         user_panels = st.selectbox(
-#             "Choose your package (or keep recommended):",
-#             allowed_panels,
-#             index=allowed_panels.index(suggested)
-#         )
-
-#         install_cost = price_table[user_panels]
-#         cash_price = install_cost - 2000
-
-#         # ─── Generation ───
-#         chosen_kw = user_panels * panel_watt / 1000
-#         annual_gen = chosen_kw * adjusted_sun * 365
-#         monthly_gen = annual_gen / 12
-
-#         # ─── Daytime Consumption Logic ───
-#         # Fixed 20% of your usage happens in daylight
-#         daytime_need_kwh = monthly_kwh * 0.20
-#         # Solar serving that consumption:
-#         solar_for_consumption = min(monthly_gen, daytime_need_kwh)
-#         # Remaining solar offsets your bill:
-#         solar_offset_kwh = monthly_gen - solar_for_consumption
-
-#         # ─── Savings & ROI ───
-#         monthly_savings = solar_offset_kwh * tariff
-#         yearly_savings = monthly_savings * 12
-#         payback = install_cost / yearly_savings if yearly_savings else 0
-#         lifetime_sav = yearly_savings * system_life
-#         roi = ((lifetime_sav - install_cost) / install_cost) * 100 if install_cost else 0
-#         offset_pct = min(100, (solar_offset_kwh * tariff) / bill * 100)
-
-#         # ─── Previous vs New Bill ───
-#         new_monthly_bill = bill - monthly_savings
-
-#         # ─── DISPLAY ───
-#         st.subheader("📊 Results")
-#         st.markdown("""
-#         <style>
-#           .grid-container {
-#             display: grid;
-#             grid-template-columns: repeat(2, minmax(0, 1fr));
-#             gap: 12px;
-#           }
-#           .card {
-#             background-color: #f0f2f6;
-#             border-radius: 12px;
-#             padding: 16px;
-#             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-#           }
-#           .card-title {
-#             font-size: 14px;
-#             color: #555;
-#             margin-bottom: 4px;
-#           }
-#           .card-value {
-#             font-size: 18px;
-#             font-weight: bold;
-#             color: #222;
-#           }
-#         </style>
-#         """, unsafe_allow_html=True)
-
-#         html = f"""
-#         <div class="grid-container">
-#           <div class="card"><div class="card-title">Previous Monthly Bill</div><div class="card-value">MYR {bill:,.2f}</div></div>
-#           <div class="card"><div class="card-title">New Monthly Bill</div><div class="card-value">MYR {new_monthly_bill:,.2f}</div></div>
-#           <div class="card"><div class="card-title">Recommended Capacity</div><div class="card-value">{rec_kw:.2f} kW</div></div>
-#           <div class="card"><div class="card-title">Panels Needed</div><div class="card-value">{raw_panels} panels</div></div>
-#           <div class="card"><div class="card-title">Selected Package</div><div class="card-value">{user_panels} panels</div></div>
-#           <div class="card"><div class="card-title">Installation Cost</div><div class="card-value">MYR {install_cost:,.0f}</div></div>
-#           <div class="card"><div class="card-title">Cash Price</div><div class="card-value">MYR {cash_price:,.0f}</div></div>
-#           <div class="card"><div class="card-title">Monthly Generation</div><div class="card-value">{monthly_gen:.0f} kWh</div></div>
-#           <div class="card"><div class="card-title">Solar for Daytime Consumption</div><div class="card-value">{solar_for_consumption:.0f} kWh</div></div>
-#           <div class="card"><div class="card-title">Solar Offset</div><div class="card-value">{solar_offset_kwh:.0f} kWh</div></div>
-#           <div class="card"><div class="card-title">Monthly Savings</div><div class="card-value">MYR {monthly_savings:.2f}</div></div>
-#           <div class="card"><div class="card-title">Payback Period</div><div class="card-value">{payback:.1f} yrs</div></div>
-#           <div class="card"><div class="card-title">ROI</div><div class="card-value">{roi:.1f}%</div></div>
-#           <div class="card"><div class="card-title">Bill Offset</div><div class="card-value">{offset_pct:.1f}%</div></div>
-#         </div>
-#         """
-#         st.markdown(html, unsafe_allow_html=True)
-
-# if __name__ == "__main__":
-#     main()
-
 import streamlit as st
+from fpdf import FPDF
+import io
 
 # === CONSTANTS ===
 TARIFF_MYR_PER_KWH   = 0.63
@@ -222,6 +74,47 @@ def generate_calculations(bill_myr, no_sun_days, package_panels):
         "total_trees":  total_trees,
         "total_co2":    total_co2
     }
+# === PDF GENERATOR ===
+def build_pdf(bill, raw_needed, pkg, c, no_sun_days):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "Solar Savings Report", ln=1, align="C")
+    pdf.ln(4)
+
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 8, f"Monthly Bill: MYR {bill:.2f}", ln=1)
+    pdf.cell(0, 8, f"No-Sun Days/Month: {no_sun_days}", ln=1)
+    pdf.cell(0, 8, f"Panels Needed: {raw_needed}", ln=1)
+    pdf.cell(0, 8, f"Package Qty: {pkg}", ln=1)
+    pdf.ln(4)
+
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 8, "Key Metrics", ln=1)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 8, f"New Bill After Solar: MYR {c['new_monthly']:.2f}", ln=1)
+    pdf.cell(0, 8, f"Monthly Savings: MYR {c['monthly_save']:.2f}", ln=1)
+    pdf.cell(0, 8, f"Payback (CC): {c['payback_cc']:.2f} yrs", ln=1)
+    pdf.cell(0, 8, f"Payback (Cash): {c['payback_cash']:.2f} yrs", ln=1)
+    pdf.ln(4)
+
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 8, "Financial Summary", ln=1)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 8, f"ROI (CC): {c['roi_cc']:.2f}%", ln=1)
+    pdf.cell(0, 8, f"ROI (Cash): {c['roi_cash']:.2f}%", ln=1)
+    pdf.ln(4)
+
+    pdf.set_font("Arial", "B", 14)
+    pdf.cell(0, 8, "Environmental Benefits", ln=1)
+    pdf.set_font("Arial", size=12)
+    pdf.cell(0, 8, f"Fossil Fuel Saved: {c['total_fossil']:.2f} kg", ln=1)
+    pdf.cell(0, 8, f"Trees Saved: {c['total_trees']:.2f}", ln=1)
+    pdf.cell(0, 8, f"CO2 Avoided: {c['total_co2']:.2f} t", ln=1)
+
+    # Return PDF as BytesIO
+    pdf_bytes = pdf.output(dest='S').encode('latin-1')
+    return io.BytesIO(pdf_bytes)
 
 def main():
     st.title("☀️ Solar Savings Calculator")
@@ -339,6 +232,15 @@ def main():
           <div class="card"><div class="title">Total CO₂</div><div class="value">{c['total_co2']:.2f} t</div></div>
         </div>
         """, unsafe_allow_html=True)
+
+        # === DOWNLOAD PDF BUTTON ===
+        pdf_buffer = build_pdf(bill, raw_needed, pkg, c, no_sun_days)
+        st.download_button(
+            label="📄 Download Report as PDF",
+            data=pdf_buffer,
+            file_name="solar_savings_report.pdf",
+            mime="application/pdf"
+        )
 
 if __name__ == "__main__":
     main()
