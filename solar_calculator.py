@@ -1,6 +1,31 @@
 import streamlit as st
 from fpdf import FPDF
+from PIL import Image
 import io
+
+# --- page-wide light yellow background ---
+st.markdown(
+    """
+    <style>
+      /* 1) keep the overall app light yellow */
+      .stApp {
+        background-color: #ffffe0 !important;
+      }
+      /* 2) target only the form wrapper to make it white */
+      .stApp .stForm {
+        background-color: white !important;
+        padding: 16px !important;
+        border-radius: 8px !important;
+      }
+      /* 3) ensure the text‐input itself is white */
+      .stApp .stTextInput>div>input,
+      .stApp .stNumberInput>div>input {
+        background-color: white !important;
+      }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
 
 # === CONSTANTS ===
 TARIFF_MYR_PER_KWH   = 0.63
@@ -122,15 +147,28 @@ def main():
     if 'calculated' not in st.session_state:
         st.session_state.calculated = False
 
-    # === INPUT FORM ===
-    with st.form("solar_form"):
-        bill_input = st.text_input("Monthly Electricity Bill (MYR):")
-        submitted  = st.form_submit_button("Calculate")
+    # === two columns: left for image, right for form ===
+    col_img, col_form = st.columns([1, 1])
 
-    try:
-        bill_val = float(bill_input)
-    except:
-        bill_val = None
+    # -- LEFT: your image --
+    with col_img:
+        st.image(
+            "https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=1172&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+            width=400,    # <-- adjust this to whatever width you like
+            caption=None
+        )
+
+    # -- RIGHT: your input form --
+    with col_form:
+        with st.form("solar_form"):
+            bill_input = st.text_input("Monthly Electricity Bill (MYR):")
+            submitted  = st.form_submit_button("Calculate")
+
+        # do your parsing / state logic immediately under the form
+        try:
+            bill_val = float(bill_input)
+        except:
+            bill_val = None
 
     if submitted:
         if bill_val and bill_val > 0:
@@ -241,6 +279,7 @@ def main():
             file_name="solar_savings_report.pdf",
             mime="application/pdf"
         )
+
 
 if __name__ == "__main__":
     main()
