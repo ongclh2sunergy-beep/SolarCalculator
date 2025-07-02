@@ -65,40 +65,59 @@ def generate_calculations(bill_myr, no_sun_days, package_panels):
     used_day_kwh      = min(monthly_gen_kwh, daytime_need)
     offset_kwh        = monthly_gen_kwh - used_day_kwh
 
-    # 4) Financials
-    cost_cc        = PRICE_TABLE[package_panels]
-    cost_cash      = cost_cc - 2000
+    # 4) NEW PRICING LOGIC (no more PRICE_TABLE lookup)
+    cash_price_map = {
+        10: 19000,
+        11: 20000,
+        12: 21000,
+        13: 22000,
+        14: 24000,
+        20: 32000,
+        30: 41000
+    }
+    # pick the highest tier ≤ package_panels
+    for tier in sorted(cash_price_map.keys(), reverse=True):
+        if package_panels >= tier:
+            base_tier = tier
+            break
+
+    cost_cash = cash_price_map[base_tier] + (package_panels - base_tier) * 1000
+    cost_cc   = cost_cash + 2000
+    print(cost_cash)
+    print(cost_cc)
+    # 5) Financials
     monthly_save   = offset_kwh * TARIFF_MYR_PER_KWH
     yearly_save    = monthly_save * 12
-    payback_cc     = cost_cc  / yearly_save  if yearly_save else 0
-    payback_cash   = cost_cash/ yearly_save  if yearly_save else 0
+    payback_cc     = cost_cc   / yearly_save  if yearly_save else 0
+    payback_cash   = cost_cash / yearly_save  if yearly_save else 0
     lifetime_sav   = yearly_save * SYSTEM_LIFE_YEARS
     roi_cc_pct     = (lifetime_sav - cost_cc)   / cost_cc   * 100
     roi_cash_pct   = (lifetime_sav - cost_cash) / cost_cash * 100
     new_monthly    = bill_myr - monthly_save
 
-    # 5) Environmental
+    # 6) Environmental
     total_fossil = kwp_installed * 350
     total_trees  = kwp_installed * 2
     total_co2    = kwp_installed * 0.85
 
     return {
-        "monthly_save": monthly_save,
-        "yearly_save":  yearly_save,
-        "payback_cc":   payback_cc,
-        "payback_cash": payback_cash,
-        "roi_cc":       roi_cc_pct,
-        "roi_cash":     roi_cash_pct,
-        "new_monthly":  new_monthly,
-        "kwp_installed":kwp_installed,
-        "monthly_gen":  monthly_gen_kwh,
-        "kwac":         kwac,
-        "cost_cc":      cost_cc,
-        "cost_cash":    cost_cash,
-        "total_fossil": total_fossil,
-        "total_trees":  total_trees,
-        "total_co2":    total_co2
+        "monthly_save":   monthly_save,
+        "yearly_save":    yearly_save,
+        "payback_cc":     payback_cc,
+        "payback_cash":   payback_cash,
+        "roi_cc":         roi_cc_pct,
+        "roi_cash":       roi_cash_pct,
+        "new_monthly":    new_monthly,
+        "kwp_installed":  kwp_installed,
+        "monthly_gen":    monthly_gen_kwh,
+        "kwac":           kwac,
+        "cost_cc":        cost_cc,
+        "cost_cash":      cost_cash,
+        "total_fossil":   total_fossil,
+        "total_trees":    total_trees,
+        "total_co2":      total_co2
     }
+
 # === PDF GENERATOR ===
 def build_pdf(bill, raw_needed, pkg, c, no_sun_days):
     pdf = FPDF()
@@ -186,18 +205,56 @@ def main():
 
         # Panel package selection
         st.subheader("📦 Solar Panel Package Selection")
-        allowed     = list(PRICE_TABLE.keys())
+        
+        # 1) recommend based on kWp as before
+        allowed = list(range(10, 41))
         rec_kwh     = bill / TARIFF_MYR_PER_KWH
         rec_kwp     = rec_kwh / (SUNLIGHT_HOURS * 30)
         raw_needed  = int(-(-rec_kwp*1000 // PANEL_WATT))
-        recommended = next((p for p in allowed if p>=raw_needed), allowed[-1])
-        pkg         = st.selectbox(
-            "Choose package size (panels):", allowed, index=allowed.index(recommended)
+        recommended = min(max(raw_needed, 10), 40)
+
+        # 2) slider 10→40
+        pkg = st.slider(
+            "Number of panels:",
+            min_value=10,
+            max_value=40,
+            step=1,
+            value=recommended
         )
 
-        # Perform calculations
+        # 3) cash-price map for the “special” tiers
+        cash_price_map = {
+            10: 19000,
+            11: 20000,
+            12: 21000,
+            13: 22000,
+            14: 24000,
+            20: 32000,
+            30: 41000
+        }
+
+        # 4) find the base tier (highest key ≤ pkg) and compute cash/CC price
+        for tier in sorted(cash_price_map.keys(), reverse=True):
+            if pkg >= tier:
+                base_tier = tier
+                break
+
+        cost_cash = cash_price_map[base_tier] + (pkg - base_tier) * 1000
+        cost_cc   = cost_cash + 2000
+
+        # 5) run your generation logic…
         c = generate_calculations(bill, no_sun_days, pkg)
 
+        # 6) override the cost/payback/ROI fields
+        lifetime_sav      = c["yearly_save"] * SYSTEM_LIFE_YEARS
+        c["cost_cash"]    = cost_cash
+        c["cost_cc"]      = cost_cc
+        c["payback_cash"] = cost_cash / c["yearly_save"] if c["yearly_save"] else 0
+        c["payback_cc"]   = cost_cc   / c["yearly_save"] if c["yearly_save"] else 0
+        c["roi_cash"]     = (lifetime_sav - cost_cash) / cost_cash * 100
+        c["roi_cc"]       = (lifetime_sav - cost_cc)   / cost_cc   * 100
+
+        
         # Inject card CSS
         st.markdown("""
         <style>
