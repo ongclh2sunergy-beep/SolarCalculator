@@ -438,7 +438,7 @@ def main():
           <div class="card"><div class="title">Price (CC)</div><div class="value">RM {c['cost_cc']:.2f}</div></div>
           <div class="card"><div class="title">Price (Cash)</div><div class="value">RM {c['cost_cash']:.2f}</div></div>
           <div class="card"><div class="title">Operating & Maintenance</div><div class="value">RM {c['om_fee_monthly']:.0f}</div></div>
-          <div class="card"><div class="title">Microinverters</div><div class="value">{MICROINV_UNITS:.2f} units</div></div>
+          <div class="card"><div class="title">Inverters</div><div class="value">{MICROINV_UNITS:.2f} units</div></div>
         </div>
         """, unsafe_allow_html=True)
 
