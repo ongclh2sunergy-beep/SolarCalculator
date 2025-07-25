@@ -269,7 +269,7 @@ def main():
     # -- LEFT: your image --
     with col_img:
         st.image(
-            "https://scontent.fkul2-4.fna.fbcdn.net/v/t39.30808-6/440361554_122107978448288867_4261085187998503818_n.png?_nc_cat=101&ccb=1-7&_nc_sid=cc71e4&_nc_eui2=AeH6AfzIKE0FPz0tf11XJ8zINmjuvyI6vvw2aO6_Ijq-_ChbL8H6VcvOfFj01REIN5f13X49XDe9OOautSImupV-&_nc_ohc=-3OvvuuHLusQ7kNvwFCa5xq&_nc_oc=Adlgv7yIm12VJVK14gZSrlPUuurRoRSofQedLFNoZqdrfxNSL3MqGIyaEdaIVqcF9Qg&_nc_zt=23&_nc_ht=scontent.fkul2-4.fna&_nc_gid=ov8GOxZQVa5X1dYcE4cPrg&oh=00_AfRB_JurvlTHhdVGGbcM8Acgaa592Y72BCc3JGD-2dDuFw&oe=68701904",
+            "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvUrQzbNoJwW7pypHZ9yweCafrQtCWeKRjUg&s",
             width=400,    # <-- adjust this to whatever width you like
             caption=None
         )
@@ -378,6 +378,7 @@ def main():
         c["inst_3yr"]     = inst_3yr
         c["inst_5yr"]     = inst_5yr
         c["save_per_pv"] = c["save_per_pv"]
+        c["new_monthly"] = max(c["new_monthly"], 0)
 
         # ─── insert O&M rounding logic here ───
         raw_sav   = c["monthly_save"]
