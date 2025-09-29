@@ -278,7 +278,12 @@ def main():
     with col_form:
         with st.form("solar_form"):
             bill_input = st.text_input("Monthly Electricity Bill (MYR):")
-            submitted  = st.form_submit_button("Calculate")
+            col1, col2 = st.columns(2)
+            with col1:
+                submitted  = st.form_submit_button("Calculate")
+            with col2:
+                reset = st.form_submit_button("Reset")
+            
 
         # do your parsing / state logic immediately under the form
         try:
@@ -292,6 +297,9 @@ def main():
             st.session_state.bill = bill_val
         else:
             st.warning("Please enter a positive number.")
+    elif reset:
+        st.session_state.bill_input = ""
+        st.write("Form reset, input cleared!")
 
     if st.session_state.calculated:
         bill = st.session_state.bill
