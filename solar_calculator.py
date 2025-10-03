@@ -2,22 +2,6 @@ import streamlit as st
 from fpdf import FPDF
 from PIL import Image
 import io
-import cronitor
-
-# Initialize Cronitor with your API key
-cronitor.api_key = "e8461f90b16b168b919ff56c008ac375"
-
-# Example: Ping a monitor named "my-job"
-monitor = cronitor.Monitor("my-job")
-
-# Send start signal
-monitor.ping(state="run")
-
-# Do some work here...
-print("Running some process...")
-
-# Send complete signal
-monitor.ping(state="complete")
 
 # --- page-wide light yellow background ---
 st.markdown(
