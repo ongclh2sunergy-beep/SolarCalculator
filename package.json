@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@cronitorio/cronitor-rum": "^0.4.1"
+  }
+}
