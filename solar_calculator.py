@@ -27,123 +27,106 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# === CONSTANTS ===
-TARIFF_MYR_PER_KWH   = 0.63
-SUNLIGHT_HOURS       = 3.62       # avg sun hrs/day
-PANEL_WATT           = 615        # W per panel
-SYSTEM_LIFE_YEARS    = 25         # yrs
+# --- Constants ---
+PANEL_WATT = 640
+TARIFF_MYR_PER_KWH = 0.4333
+DAILY_USAGE_RATIO = 0.7  # 70% daytime usage
+INTEREST_RATE = 0.08
+INSTALLMENT_YEARS = 4
+SYSTEM_LIFE_YEARS = 25
 
 PRICE_TABLE = {
-    10: 21000,
-    14: 26000,
-    20: 34000,
-    30: 43000,
-    40: 52000
+    10: 17000,  # 10 panels
+    20: 28000   # 20 panels
 }
 
 O_AND_M_PER_YEAR    = 800        # RM/year
 MICROINV_UNITS      = 5.0        # units
 
-def generate_calculations(
-    bill_myr,
-    no_sun_days,
-    package_panels,
-    use_daytime,
-    sunlight_hours=SUNLIGHT_HOURS
-):
-    # 1) Adjusted sun hours
-    sunny_days   = 30 - no_sun_days
-    adjusted_sun = (
-        sunny_days * sunlight_hours +
-        no_sun_days * sunlight_hours * 0.1
-    ) / 30
-
-    # 2) Back-out their rough kWh/month from the bill
-    approx_kwh = bill_myr / TARIFF_MYR_PER_KWH
-
-    # 3) Choose the correct energy rate tier
-    if approx_kwh <= 1500:
-        energy_sen = 27.03
+def calculate_values(no_panels, sunlight_hours, monthly_bill):
+    # System size
+    kwp = no_panels * PANEL_WATT / 1000
+    
+    # Daily yield
+    daily_yield = kwp * sunlight_hours
+    
+    # Daytime saving (kWh)
+    daytime_kwh = daily_yield * DAILY_USAGE_RATIO
+    
+    # Daytime saving (RM)
+    daytime_rm = daytime_kwh * TARIFF_MYR_PER_KWH
+    
+    # Daily, monthly, yearly saving
+    daily_saving = daytime_rm
+    monthly_saving = daily_saving * 30
+    yearly_saving = monthly_saving * 12
+    monthly_bill = float(monthly_bill) if monthly_bill else 0
+    monthly_kwh = monthly_bill / TARIFF_MYR_PER_KWH  # if you have access to monthly_bill
+    new_monthly_bill = monthly_bill - monthly_saving
+    
+    # --- Cost (Tiered) ---
+    if no_panels < 10:
+        cost_cash = 17000
+    elif 10 <= no_panels <= 19:
+        cost_cash = 17000 + (no_panels - 10) * 1000
+    elif 20 <= no_panels <= 50:
+        cost_cash = 28000 + (no_panels - 20) * 1000
     else:
-        energy_sen = 37.03
+        cost_cash = 58000
 
-    # 4) Other tariff components
-    capacity_sen = 4.55
-    network_sen  = 12.85
-    retail_rm    = 10.00
+    cost_cc = cost_cash + 2000
 
-    # 5) Build the final unit rate in RM/kWh
-    unit_rate = (energy_sen + capacity_sen + network_sen) / 100
+    save_per_pv = yearly_saving / no_panels if no_panels else 0
+    kwp = no_panels * PANEL_WATT / 1000
+    kwp_installed = kwp
+    inverter_efficiency = 0.9
+    kwac = kwp * inverter_efficiency    
+        
+    # --- Installments ---
+    installment_interest = cost_cash * (1 + INTEREST_RATE)
+    installment_4yrs = installment_interest / (INSTALLMENT_YEARS * 12)
 
-    # Monthly energy per single panel:
-    monthly_gen_per_pv = (PANEL_WATT / 1000) * sunlight_hours * 30
+    cost_cc = installment_interest
 
-    # Saving per PV = monthly kWh per panel × your RM/kWh rate
-    saving_per_pv = monthly_gen_per_pv * unit_rate
+    # --- Payback & ROI ---
+    roi_cash = cost_cash / yearly_saving if yearly_saving else 0
+    roi_cc = cost_cc / yearly_saving if yearly_saving else 0
 
-    # 6) Generation sizing (unchanged)
-    monthly_kwh     = approx_kwh
-    kwp_installed   = package_panels * PANEL_WATT / 1000
-    annual_gen_kwh  = kwp_installed * adjusted_sun * 365
-    monthly_gen_kwh = annual_gen_kwh / 12
-    kwac            = kwp_installed * 0.77
+    # --- Operating & Maintenance Fee ---
+    om_fee_monthly = cost_cash * 0.01 / 12  # 1% per year
 
-    # 7) Daytime consumption toggle
-    if use_daytime:
-        daytime_need = monthly_kwh * 0.20
-        used_day_kwh = min(monthly_gen_kwh, daytime_need)
-        offset_kwh   = monthly_gen_kwh - used_day_kwh
-    else:
-        used_day_kwh = 0
-        offset_kwh   = monthly_gen_kwh
-
-    # 8) Panel pricing (tiered + fallback + CC)
-    cash_price_map = {10:19000,11:20000,12:21000,13:22000,14:24000,20:32000,30:41000}
-    for tier in sorted(cash_price_map, reverse=True):
-        if package_panels >= tier:
-            base_tier = tier
-            break
-    cost_cash = cash_price_map[base_tier] + (package_panels - base_tier) * 1000
-    cost_cc   = cost_cash + 2000
-
-    # 9) Financials using the true tariff + retail fee
-    true_bill     = monthly_kwh * unit_rate + retail_rm
-    monthly_save  = offset_kwh  * unit_rate
-    yearly_save   = monthly_save * 12
-
-    payback_cc    = cost_cc   / yearly_save  if yearly_save else 0
-    payback_cash  = cost_cash / yearly_save  if yearly_save else 0
-    lifetime_sav  = yearly_save * SYSTEM_LIFE_YEARS
-    roi_cc_pct    = (lifetime_sav - cost_cc)   / cost_cc   * 100
-    roi_cash_pct  = (lifetime_sav - cost_cash) / cost_cash * 100
-    new_monthly   = true_bill   - monthly_save
-
-    # 10) Environmental
-    total_fossil = kwp_installed * 350
-    total_trees  = kwp_installed * 2
-    total_co2    = kwp_installed * 0.85
-
+    # --- Environmental Impact ---
+    # Reference: per 1 kWp = 350 kg fossil saved, 2 trees, 0.85 t CO₂
+    total_fossil = 350 * kwp_installed  # kg
+    total_trees  = 2 * kwp_installed    # trees
+    total_co2    = 0.85 * kwp_installed # tons
+    
     return {
-        "monthly_kwh":    monthly_kwh,
-        "unit_rate":      unit_rate,
-        "retail_charge":  retail_rm,
-        "true_bill":      true_bill,
-        "monthly_save":   monthly_save,
-        "yearly_save":    yearly_save,
-        "payback_cc":     payback_cc,
-        "payback_cash":   payback_cash,
-        "roi_cc":         roi_cc_pct,
-        "roi_cash":       roi_cash_pct,
-        "new_monthly":    new_monthly,
-        "kwp_installed":  kwp_installed,
-        "monthly_gen":    monthly_gen_kwh,
-        "kwac":           kwac,
-        "cost_cc":        cost_cc,
-        "cost_cash":      cost_cash,
-        "total_fossil":   total_fossil,
-        "total_trees":    total_trees,
-        "total_co2":      total_co2,
-        "save_per_pv": saving_per_pv
+        "No Panels": no_panels,
+        "kWp": round(kwp, 2),
+        "Daily Yield (kWh)": round(daily_yield, 2),
+        "Daytime Saving (kWh)": round(daytime_kwh, 2),
+        "Daytime Saving (RM)": round(daytime_rm, 2),
+        "Daily Saving (RM)": round(daily_saving, 2),
+        "Monthly Saving (RM)": round(monthly_saving, 0),
+        "Yearly Saving (RM)": round(yearly_saving, 0),
+        "Total Cost (RM)": f"{int(cost_cash):,}",
+        "Installment 8% Interests": f"{int(installment_interest):,}",
+        "Installment 4 Years (RM)": round(installment_4yrs, 1),
+        "monthly_kwh": round(monthly_kwh, 2),
+        "new_monthly": round(new_monthly_bill, 0),
+        "roi_cash": roi_cash,
+        "roi_cc": roi_cc,
+        "save_per_pv": round(save_per_pv, 2),
+        "kwp_installed": round(kwp_installed, 2),
+        "kwac": round(kwac, 2),
+        "cost_cash": cost_cash,
+        "cost_cc": round(cost_cc, 2),
+        "om_fee_monthly": round(om_fee_monthly, 0),
+        "total_fossil": round(total_fossil, 2),
+        "total_trees": round(total_trees, 2),
+        "total_co2": round(total_co2, 2),
+
     }
 
 # === PDF GENERATOR ===
@@ -262,6 +245,9 @@ def main():
 
     if 'calculated' not in st.session_state:
         st.session_state.calculated = False
+    
+    # --- Default sunlight hours ---
+    default_sunlight = 3.5
 
     # === two columns: left for image, right for form ===
     col_img, col_form = st.columns([1, 1])
@@ -281,12 +267,31 @@ def main():
                 "Monthly Electricity Bill (MYR):",
                 key="bill_input"
             )
+            bill_input = float(bill_input) if bill_input else 0
             submitted = st.form_submit_button("Calculate")
 
         try:
             bill_val = float(bill_input)
         except:
             bill_val = None
+
+        # ---- Location ----
+        location     = st.selectbox(
+                "Location:",
+                ["Use Default (3.5 hrs)", "Johor Bahru", "BP/Muar", "Kuala Lumpur", "North"],
+                index=0
+            )
+
+        # Map each choice to its peak sun hours
+        area_sun_map = {
+            "Johor Bahru":   3.42,
+            "BP/Muar":       3.56,
+            "Kuala Lumpur":  3.62,
+            "North":         3.75
+        }
+        # Use default 3.5 if "Use Default" is selected
+        sunlight_hours = default_sunlight if location == "Use Default (3.5 hrs)" else area_sun_map[location]
+
 
         # ---- Handle buttons ----
         if submitted:
@@ -308,89 +313,51 @@ def main():
         # Advanced settings
         with st.expander("⚙️ Advanced Settings"):
             no_sun_days = st.selectbox("No-sun days per month:", [0,15,30], index=0)
-            use_daytime = st.checkbox("Enable daytime consumption (20%)", value=False)
-            location     = st.selectbox(
-                "Location:",
-                ["Johor Bahru", "BP/Muar", "Kuala Lumpur", "North"]
-            )
+            # use_daytime = st.checkbox("Enable daytime consumption (20%)", value=False)
+            # location     = st.selectbox(
+            #     "Location:",
+            #     ["Johor Bahru", "BP/Muar", "Kuala Lumpur", "North"]
+            # )
 
-            # Map each choice to its peak sun hours
-            area_sun_map = {
-                "Johor Bahru":   3.42,
-                "BP/Muar":       3.56,
-                "Kuala Lumpur":  3.62,
-                "North":         3.75
-            }
-            # grab the correct value for this run
-            sunlight_hours = area_sun_map[location]
+            # # Map each choice to its peak sun hours
+            # area_sun_map = {
+            #     "Johor Bahru":   3.42,
+            #     "BP/Muar":       3.56,
+            #     "Kuala Lumpur":  3.62,
+            #     "North":         3.75
+            # }
+            # # grab the correct value for this run
+            # sunlight_hours = area_sun_map[location]
 
         # Panel package selection
         st.subheader("📦 Solar Panel Package Selection")
         
-        # 1) recommend based on kWp as before
-        allowed = list(range(10, 41))
+        # 1) Recommend based on kWp as before
         rec_kwh     = bill / TARIFF_MYR_PER_KWH
         rec_kwp     = rec_kwh / (sunlight_hours * 30)
-        raw_needed  = int(-(-rec_kwp*1000 // PANEL_WATT))
+        raw_needed  = int(-(-rec_kwp * 1000 // PANEL_WATT))
         recommended = min(max(raw_needed, 10), 40)
 
-        # 2) slider 10→40
+        # 2) Panel slider (10–50)
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
-            max_value=40,
+            max_value=50,
             step=1,
             value=recommended
         )
 
-        # 3) cash-price map for the “special” tiers
-        cash_price_map = {
-            10: 19000,
-            11: 20000,
-            12: 21000,
-            13: 22000,
-            14: 24000,
-            20: 32000,
-            30: 41000
-        }
+        # --- 2) Run calculation using your function ---
+        c = calculate_values(pkg, sunlight_hours if sunlight_hours else 3.5, bill_input)
 
-        # 4) find the base tier (highest key ≤ pkg) and compute cash/CC price
-        for tier in sorted(cash_price_map.keys(), reverse=True):
-            if pkg >= tier:
-                base_tier = tier
-                break
+        # --- 3) Override financial data ---
+        c["Cost Cash (RM)"] = float(c["Total Cost (RM)"].replace(',', ''))
+        c["Cost CC (RM)"]   = c["cost_cc"]
+        c["ROI Cash (%)"] = c["roi_cash"]
+        c["ROI CC (%)"]   = c["roi_cc"]
 
-        cost_cash = cash_price_map[base_tier] + (pkg - base_tier) * 1000
-        cost_cc   = cost_cash + 2000
-
-        # 3-year (36 months) and 5-year (60 months) monthly payments
-        inst_3yr = cost_cc / (3 * 12)
-        inst_5yr = cost_cc / (5 * 12)
-
-        # 5) run your generation logic…
-        c = generate_calculations(
-            bill_myr=bill,
-            no_sun_days=no_sun_days,
-            package_panels=pkg,
-            use_daytime=use_daytime,
-            sunlight_hours=sunlight_hours
-        )
-
-        # 6) override the cost/payback/ROI fields
-        lifetime_sav      = c["yearly_save"] * SYSTEM_LIFE_YEARS
-        c["cost_cash"]    = cost_cash
-        c["cost_cc"]      = cost_cc
-        c["payback_cash"] = cost_cash / c["yearly_save"] if c["yearly_save"] else 0
-        c["payback_cc"]   = cost_cc   / c["yearly_save"] if c["yearly_save"] else 0
-        c["roi_cash"]     = (lifetime_sav - cost_cash) / cost_cash * 100
-        c["roi_cc"]       = (lifetime_sav - cost_cc)   / cost_cc   * 100
-        c["inst_3yr"]     = inst_3yr
-        c["inst_5yr"]     = inst_5yr
-        c["save_per_pv"] = c["save_per_pv"]
-        c["new_monthly"] = max(c["new_monthly"], 0)
-
-        # ─── insert O&M rounding logic here ───
-        raw_sav   = c["monthly_save"]
+        # --- 4) O&M rounding logic ---
+        raw_sav   = float(c["Monthly Saving (RM)"])
         rem       = raw_sav % 100
         base_hund = raw_sav - rem
 
@@ -399,28 +366,26 @@ def main():
         else:
             om_fee = base_hund
 
-        # clamp between 500 and 1000
-        om_fee = max(500, min(om_fee, 1000))
-
-        c["om_fee_monthly"] = om_fee
+        om_fee = max(500, min(om_fee, 1000))  # clamp
+        c["O&M Fee (RM)"] = om_fee
 
         # Inject card CSS
         st.markdown("""
         <style>
-          .grid-container {
+        .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
             gap: 12px;
             margin: 16px 0;
-          }
-          .card {
+        }
+        .card {
             background: #fff;
             border-radius: 8px;
             padding: 12px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-          }
-          .card .title { font-size:0.8rem; color:#666; margin-bottom:4px; }
-          .card .value { font-size:1.1rem; font-weight:600; color:#222; }
+        }
+        .card .title { font-size:0.8rem; color:#666; margin-bottom:4px; }
+        .card .value { font-size:1.1rem; font-weight:600; color:#222; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -428,42 +393,40 @@ def main():
         st.subheader("📈 Key Metrics")
         st.markdown(f"""
         <div class="grid-container">
-          <div class="card"><div class="title">Consumption</div><div class="value">{c['monthly_kwh']:.2f} kWh</div></div>
-          <div class="card"><div class="title">Previous Bill</div><div class="value">RM {bill:.2f}</div></div>
-          <div class="card"><div class="title">New Bill</div><div class="value">RM {c['new_monthly']:.2f}</div></div>
-          <div class="card"><div class="title">Payback (CC)</div><div class="value">{c['payback_cc']:.2f} yrs</div></div>
-          <div class="card"><div class="title">Payback (Cash)</div><div class="value">{c['payback_cash']:.2f} yrs</div></div>
+        <div class="card"><div class="title">Consumption</div><div class="value">{c['monthly_kwh']:.2f} kWh</div></div>
+        <div class="card"><div class="title">Previous Bill</div><div class="value">RM {bill:.2f}</div></div>
+        <div class="card"><div class="title">New Bill</div><div class="value">RM {c['new_monthly']:.2f}</div></div>
+        <div class="card"><div class="title">ROI (CC)</div><div class="value">{c['roi_cc']:.2f} yrs</div></div>
+        <div class="card"><div class="title">ROI (Cash)</div><div class="value">{c['roi_cash']:.2f} yrs</div></div>
         </div>
         """, unsafe_allow_html=True)
 
         # === PANEL & SAVINGS SUMMARY ===
-        st.subheader("🔧 Panel & Savings Summary")
+        st.subheader("🔆 Panel & Savings Summary")
         st.markdown(f"""
         <div class="grid-container">
-          <div class="card"><div class="title">Panels Needed</div><div class="value">{raw_needed} panels</div></div>
-          <div class="card"><div class="title">Package Qty</div><div class="value">{pkg} panels</div></div>
-          <div class="card"><div class="title">Saving per PV</div><div class="value">RM {c['save_per_pv']:.2f}</div></div>
-          <div class="card"><div class="title">Installed kWp</div><div class="value">{c['kwp_installed']:.2f} kWp</div></div>
-          <div class="card"><div class="title">kWac</div><div class="value">{c['kwac']:.2f} kW</div></div>
-          <div class="card"><div class="title">Price (CC)</div><div class="value">RM {c['cost_cc']:.2f}</div></div>
-          <div class="card"><div class="title">Price (Cash)</div><div class="value">RM {c['cost_cash']:.2f}</div></div>
-          <div class="card"><div class="title">Operating & Maintenance</div><div class="value">RM {c['om_fee_monthly']:.0f}</div></div>
-          <div class="card"><div class="title">Inverters</div><div class="value">{MICROINV_UNITS:.2f} units</div></div>
+        <div class="card"><div class="title">No. of Panels</div><div class="value">{c['No Panels']}</div></div>
+        <div class="card"><div class="title">Installed Capacity</div><div class="value">{c['kWp']:.2f} kWp</div></div>
+        <div class="card"><div class="title">Daily Yield</div><div class="value">{c['Daily Yield (kWh)']:.2f} kWh</div></div>
+        <div class="card"><div class="title">Daytime Saving (kWh)</div><div class="value">{c['Daytime Saving (kWh)']:.2f} kWh</div></div>
+        <div class="card"><div class="title">Daytime Saving (RM)</div><div class="value">RM {c['Daytime Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Daily Saving (RM)</div><div class="value">RM {c['Daily Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Monthly Saving (RM)</div><div class="value">RM {c['Monthly Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Yearly Saving (RM)</div><div class="value">RM {c['Yearly Saving (RM)']:.2f}</div></div>
         </div>
         """, unsafe_allow_html=True)
 
-        # === FINANCIAL SUMMARY (with ROI) ===
+        # === FINANCIAL SUMMARY ===
         st.subheader("💰 Financial Summary")
         st.markdown(f"""
         <div class="grid-container">
-          <div class="card"><div class="title">Total Sav/Month</div><div class="value">RM {c['monthly_save']:.2f}</div></div>
-          <div class="card"><div class="title">Total Sav/Year</div><div class="value">RM {c['yearly_save']:.2f}</div></div>
-          <div class="card"><div class="title">Payback (CC)</div><div class="value">{c['payback_cc']:.2f} yrs</div></div>
-          <div class="card"><div class="title">Payback (Cash)</div><div class="value">{c['payback_cash']:.2f} yrs</div></div>
-          <div class="card"><div class="title">ROI (CC)</div><div class="value">{c['roi_cc']:.2f}%</div></div>
-          <div class="card"><div class="title">ROI (Cash)</div><div class="value">{c['roi_cash']:.2f}%</div></div>
-          <div class="card"><div class="title">3-Year Installment(0%)</div><div class="value">RM {c['inst_3yr']:.2f}/month</div></div>
-          <div class="card"><div class="title">5-Year Installment(0%)</div><div class="value">RM {c['inst_5yr']:.2f}/month</div></div>
+        <div class="card"><div class="title">Total Cost(Cash)</div><div class="value">RM {c['Total Cost (RM)']}</div></div>
+        <div class="card"><div class="title">Total Sav/Month</div><div class="value">RM {c['Monthly Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Total Sav/Year</div><div class="value">RM {c['Yearly Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">ROI (CC)</div><div class="value">{c['roi_cc']:.2f} yrs</div></div>
+        <div class="card"><div class="title">ROI (Cash)</div><div class="value">{c['roi_cash']:.2f} yrs</div></div>
+        <div class="card"><div class="title">Installment (8% Interest)</div><div class="value">RM {c['Installment 8% Interests']}</div></div>
+        <div class="card"><div class="title">Installment (4 Years)</div><div class="value">RM {c['Installment 4 Years (RM)']:.2f}</div></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -471,12 +434,12 @@ def main():
         st.subheader("🌳 Environmental Benefits")
         st.markdown(f"""
         <div class="grid-container">
-          <div class="card"><div class="title">Fossil Fuel /1 kWp</div><div class="value">350 kg</div></div>
-          <div class="card"><div class="title">Trees /1 kWp</div><div class="value">2</div></div>
-          <div class="card"><div class="title">CO₂ /1 kWp</div><div class="value">0.85 t</div></div>
-          <div class="card"><div class="title">Total Fossil</div><div class="value">{c['total_fossil']:.2f} kg</div></div>
-          <div class="card"><div class="title">Total Trees</div><div class="value">{c['total_trees']:.2f}</div></div>
-          <div class="card"><div class="title">Total CO₂</div><div class="value">{c['total_co2']:.2f} t</div></div>
+        <div class="card"><div class="title">Fossil Fuel /1 kWp</div><div class="value">350 kg</div></div>
+        <div class="card"><div class="title">Trees /1 kWp</div><div class="value">2</div></div>
+        <div class="card"><div class="title">CO₂ /1 kWp</div><div class="value">0.85 t</div></div>
+        <div class="card"><div class="title">Total Fossil</div><div class="value">{c['total_fossil']:.2f} kg</div></div>
+        <div class="card"><div class="title">Total Trees</div><div class="value">{c['total_trees']:.2f}</div></div>
+        <div class="card"><div class="title">Total CO₂</div><div class="value">{c['total_co2']:.2f} t</div></div>
         </div>
         """, unsafe_allow_html=True)
 
