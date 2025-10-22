@@ -1,3 +1,4 @@
+import math
 import streamlit as st
 from fpdf import FPDF
 from PIL import Image
@@ -33,7 +34,6 @@ TARIFF_MYR_PER_KWH = 0.4333
 DAILY_USAGE_RATIO = 0.7  # 70% daytime usage
 INTEREST_RATE = 0.08
 INSTALLMENT_YEARS = 4
-SYSTEM_LIFE_YEARS = 25
 
 PRICE_TABLE = {
     10: 17000,  # 10 panels
@@ -62,7 +62,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill):
     yearly_saving = monthly_saving * 12
     monthly_bill = float(monthly_bill) if monthly_bill else 0
     monthly_kwh = monthly_bill / TARIFF_MYR_PER_KWH  # if you have access to monthly_bill
-    new_monthly_bill = monthly_bill - monthly_saving
+    new_monthly_bill = max(monthly_bill - monthly_saving,0)
     
     # --- Cost (Tiered) ---
     if no_panels < 10:
@@ -332,23 +332,33 @@ def main():
         # Panel package selection
         st.subheader("📦 Solar Panel Package Selection")
         
-        # 1) Recommend based on kWp as before
-        rec_kwh     = bill / TARIFF_MYR_PER_KWH
-        rec_kwp     = rec_kwh / (sunlight_hours * 30)
-        raw_needed  = int(-(-rec_kwp * 1000 // PANEL_WATT))
-        recommended = min(max(raw_needed, 10), 40)
+        # --- 1) Estimate monthly energy usage (kWh) from bill ---
+        rec_kwh = bill / TARIFF_MYR_PER_KWH  # monthly usage in kWh
 
-        # 2) Panel slider (10–50)
+        rec_kwp = bill / (sunlight_hours * DAILY_USAGE_RATIO * TARIFF_MYR_PER_KWH * 30)
+        raw_needed = math.ceil(rec_kwp * 1000 / PANEL_WATT)
+        recommended = min(max(raw_needed, 10), 50)
+
+        # --- 4) Let user adjust from recommended baseline ---
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
             max_value=50,
             step=1,
-            value=recommended
+            value=recommended,
+            help=f"Recommended to offset your monthly bill of RM {bill:.0f} is about {recommended} panels."
         )
 
+        # 3️⃣ Info text under slider
+        st.markdown(
+            f"<p style='color: #555; font-size: 14px;'>💡 Recommended: Estimated <b>{recommended}</b> solar panels are needed to fully cover your monthly bill.</p>",
+            unsafe_allow_html=True
+        )
+
+        st.markdown("_Note: All savings and impacts are estimated based on 70% daytime usage._")
+
         # --- 2) Run calculation using your function ---
-        c = calculate_values(pkg, sunlight_hours if sunlight_hours else 3.5, bill_input)
+        c = calculate_values(pkg, sunlight_hours if sunlight_hours else 3.5, bill)
 
         # --- 3) Override financial data ---
         c["Cost Cash (RM)"] = float(c["Total Cost (RM)"].replace(',', ''))
@@ -393,11 +403,14 @@ def main():
         st.subheader("📈 Key Metrics")
         st.markdown(f"""
         <div class="grid-container">
-        <div class="card"><div class="title">Consumption</div><div class="value">{c['monthly_kwh']:.2f} kWh</div></div>
+        <div class="card"><div class="title">Estimated Solar Panel Needed</div><div class="value">{c['No Panels']}</div></div>
+        <div class="card"><div class="title">Estimated Monthly Saving (RM)</div><div class="value">RM {c['Monthly Saving (RM)']:.2f}</div></div>
         <div class="card"><div class="title">Previous Bill</div><div class="value">RM {bill:.2f}</div></div>
         <div class="card"><div class="title">New Bill</div><div class="value">RM {c['new_monthly']:.2f}</div></div>
-        <div class="card"><div class="title">ROI (CC)</div><div class="value">{c['roi_cc']:.2f} yrs</div></div>
-        <div class="card"><div class="title">ROI (Cash)</div><div class="value">{c['roi_cash']:.2f} yrs</div></div>
+        <div class="card"><div class="title">Total Cost(Cash)</div><div class="value">RM {c['Total Cost (RM)']}</div></div>
+        <div class="card"><div class="title">Total Installment (4 Years @ 8% Interest)</div><div class="value">RM {c['Installment 8% Interests']}</div></div>
+        <div class="card"><div class="title">Estimated ROI (Cash)</div><div class="value">{c['roi_cash']:.2f} yrs</div></div>
+        <div class="card"><div class="title">Estimated ROI (CC)</div><div class="value">{c['roi_cc']:.2f} yrs</div></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -405,14 +418,15 @@ def main():
         st.subheader("🔆 Panel & Savings Summary")
         st.markdown(f"""
         <div class="grid-container">
-        <div class="card"><div class="title">No. of Panels</div><div class="value">{c['No Panels']}</div></div>
+        <div class="card"><div class="title">Consumption</div><div class="value">{c['monthly_kwh']:.2f} kWh</div></div>
+        <div class="card"><div class="title">Estimated No. of Panels</div><div class="value">{c['No Panels']}</div></div>
         <div class="card"><div class="title">Installed Capacity</div><div class="value">{c['kWp']:.2f} kWp</div></div>
-        <div class="card"><div class="title">Daily Yield</div><div class="value">{c['Daily Yield (kWh)']:.2f} kWh</div></div>
-        <div class="card"><div class="title">Daytime Saving (kWh)</div><div class="value">{c['Daytime Saving (kWh)']:.2f} kWh</div></div>
-        <div class="card"><div class="title">Daytime Saving (RM)</div><div class="value">RM {c['Daytime Saving (RM)']:.2f}</div></div>
-        <div class="card"><div class="title">Daily Saving (RM)</div><div class="value">RM {c['Daily Saving (RM)']:.2f}</div></div>
-        <div class="card"><div class="title">Monthly Saving (RM)</div><div class="value">RM {c['Monthly Saving (RM)']:.2f}</div></div>
-        <div class="card"><div class="title">Yearly Saving (RM)</div><div class="value">RM {c['Yearly Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Estimated Daily Yield</div><div class="value">{c['Daily Yield (kWh)']:.2f} kWh</div></div>
+        <div class="card"><div class="title">Estimated Daytime Saving (kWh)</div><div class="value">{c['Daytime Saving (kWh)']:.2f} kWh</div></div>
+        <div class="card"><div class="title">Estimated Daytime Saving (RM)</div><div class="value">RM {c['Daytime Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Estimated Daily Saving (RM)</div><div class="value">RM {c['Daily Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Estimated Monthly Saving (RM)</div><div class="value">RM {c['Monthly Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Estimated Yearly Saving (RM)</div><div class="value">RM {c['Yearly Saving (RM)']:.2f}</div></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -420,13 +434,13 @@ def main():
         st.subheader("💰 Financial Summary")
         st.markdown(f"""
         <div class="grid-container">
+        <div class="card"><div class="title">Estimated Total Sav/Month</div><div class="value">RM {c['Monthly Saving (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Estimated Total Sav/Year</div><div class="value">RM {c['Yearly Saving (RM)']:.2f}</div></div>
         <div class="card"><div class="title">Total Cost(Cash)</div><div class="value">RM {c['Total Cost (RM)']}</div></div>
-        <div class="card"><div class="title">Total Sav/Month</div><div class="value">RM {c['Monthly Saving (RM)']:.2f}</div></div>
-        <div class="card"><div class="title">Total Sav/Year</div><div class="value">RM {c['Yearly Saving (RM)']:.2f}</div></div>
-        <div class="card"><div class="title">ROI (CC)</div><div class="value">{c['roi_cc']:.2f} yrs</div></div>
-        <div class="card"><div class="title">ROI (Cash)</div><div class="value">{c['roi_cash']:.2f} yrs</div></div>
         <div class="card"><div class="title">Installment (8% Interest)</div><div class="value">RM {c['Installment 8% Interests']}</div></div>
         <div class="card"><div class="title">Installment (4 Years)</div><div class="value">RM {c['Installment 4 Years (RM)']:.2f}</div></div>
+        <div class="card"><div class="title">Estimated ROI (CC)</div><div class="value">{c['roi_cc']:.2f} yrs</div></div>
+        <div class="card"><div class="title">Estimated ROI (Cash)</div><div class="value">{c['roi_cash']:.2f} yrs</div></div>
         </div>
         """, unsafe_allow_html=True)
 
@@ -434,12 +448,9 @@ def main():
         st.subheader("🌳 Environmental Benefits")
         st.markdown(f"""
         <div class="grid-container">
-        <div class="card"><div class="title">Fossil Fuel /1 kWp</div><div class="value">350 kg</div></div>
-        <div class="card"><div class="title">Trees /1 kWp</div><div class="value">2</div></div>
-        <div class="card"><div class="title">CO₂ /1 kWp</div><div class="value">0.85 t</div></div>
-        <div class="card"><div class="title">Total Fossil</div><div class="value">{c['total_fossil']:.2f} kg</div></div>
-        <div class="card"><div class="title">Total Trees</div><div class="value">{c['total_trees']:.2f}</div></div>
-        <div class="card"><div class="title">Total CO₂</div><div class="value">{c['total_co2']:.2f} t</div></div>
+        <div class="card"><div class="title">Total Fossil /1 kWp</div><div class="value">{c['total_fossil']:.2f} kg</div></div>
+        <div class="card"><div class="title">Total Trees /1 kWp</div><div class="value">{c['total_trees']:.2f}</div></div>
+        <div class="card"><div class="title">Total CO₂ /1 kWp</div><div class="value">{c['total_co2']:.2f} t</div></div>
         </div>
         """, unsafe_allow_html=True)
 
