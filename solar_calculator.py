@@ -321,22 +321,31 @@ def main():
         except:
             bill_val = None
 
-        # ---- Location ----
-        location     = st.selectbox(
-                "Location:",
-                ["Use Default (3.5 hrs)", "Johor Bahru", "BP/Muar", "Kuala Lumpur", "North"],
-                index=0
-            )
+        # --- Step 0: Select location (for sunlight hours) ---
+        st.subheader("📍 Select Location")
 
-        # Map each choice to its peak sun hours
         area_sun_map = {
             "Johor Bahru":   3.42,
             "BP/Muar":       3.56,
             "Kuala Lumpur":  3.62,
-            "North":         3.75
+            "North":         3.75,
+            "Other (Default 3.5 h/day)": 3.5
         }
-        # Use default 3.5 if "Use Default" is selected
-        sunlight_hours = default_sunlight if location == "Use Default (3.5 hrs)" else area_sun_map[location]
+
+        # Default 3.5 hours/day if nothing selected
+        selected_area = st.selectbox(
+            "Select your area:",
+            options=list(area_sun_map.keys()),
+            index=len(area_sun_map) - 1  # Default to the first option (Johor Bahru)
+        )
+
+        # Use the selected area's sunlight hours or fallback to default
+        sunlight_hours = area_sun_map.get(selected_area, 3.5)
+
+        st.markdown(
+            f"<p style='color:#555; font-size:14px;'>☀️ Average sunlight hours for <b>{selected_area}</b>: <b>{sunlight_hours} hours/day</b></p>",
+            unsafe_allow_html=True
+        )
 
 
         # ---- Handle buttons ----
@@ -380,7 +389,6 @@ def main():
         target_kwh = energy_portion_rm / TARIFF_ENERGY  # how much solar needs to offset
 
         # --- Step 4: Calculate per-panel production ---
-        sunlight_hours = 3.5
         DAILY_USAGE_RATIO = 0.7
         PANEL_WATT = 640
 
