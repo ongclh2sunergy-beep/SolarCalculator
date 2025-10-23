@@ -1,4 +1,5 @@
 import math
+import re
 import streamlit as st
 from fpdf import FPDF
 from PIL import Image
@@ -52,31 +53,36 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill):
     monthly_bill = float(monthly_bill) if monthly_bill else 0
 
     # --- 1) Energy-charge portion only (60%) ---
-    effective_bill = float(monthly_bill) * ENERGY_CHARGE_RATIO  # only 60% solar offsettable
+    energy_charge_portion = monthly_bill * ENERGY_CHARGE_RATIO  # e.g. 60% of total bill
 
     # --- 2) System size ---
     kwp = no_panels * PANEL_WATT / 1000
-    
+
     # --- 3) Daily yield ---
     daily_yield = kwp * sunlight_hours
-    
+
     # --- 4) Daytime saving (70% of yield) ---
     daytime_kwh = daily_yield * DAILY_USAGE_RATIO
     daytime_rm = daytime_kwh * GENERAL_TARIFF
-    
-    # --- 5) Savings ---
+
+    # --- 5) Raw solar savings ---
     daily_saving = daytime_rm
+    monthly_saving_raw = daily_saving * 30
+    yearly_saving_raw = monthly_saving_raw * 12
+
+    # --- 6) Cap monthly saving so it cannot exceed energy-charge portion ---
     monthly_saving = daily_saving * 30
     yearly_saving = monthly_saving * 12
-    
-    # --- 6) New monthly bill (cannot go below non-energy charge) ---
-    monthly_kwh = effective_bill / GENERAL_TARIFF
+
+    # --- 7) New monthly bill (cannot go below non-energy charge) ---
     new_monthly_bill = monthly_bill - monthly_saving
-    
-    # --- 7) Estimate total monthly kWh ---
+    if new_monthly_bill < monthly_bill * (1 - ENERGY_CHARGE_RATIO):
+        new_monthly_bill = monthly_bill * (1 - ENERGY_CHARGE_RATIO)
+
+    # --- 8) Estimate total monthly kWh ---
     monthly_kwh = monthly_bill / GENERAL_TARIFF if GENERAL_TARIFF else 0
 
-    # --- 8) Cost tiers ---
+    # --- 9) Cost tiers ---
     if no_panels < 10:
         cost_cash = 17000
     elif 10 <= no_panels <= 19:
@@ -88,23 +94,22 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill):
 
     cost_cc = cost_cash + 2000
 
-    # --- Performance ---
+    # --- 10) Performance ---
     save_per_pv = yearly_saving / no_panels if no_panels else 0
     inverter_efficiency = 0.9
     kwac = kwp * inverter_efficiency
 
-    # --- Installments ---
+    # --- 11) Installments ---
     installment_interest = cost_cash * (1 + INTEREST_RATE)
     installment_4yrs = installment_interest / (INSTALLMENT_YEARS * 12)
-
     cost_cc = installment_interest
 
-    # --- ROI & O&M ---
+    # --- 12) ROI & O&M ---
     roi_cash = cost_cash / yearly_saving if yearly_saving else 0
     roi_cc = cost_cc / yearly_saving if yearly_saving else 0
     om_fee_monthly = cost_cash * 0.01 / 12  # 1% per year
 
-    # --- Environmental Impact ---
+    # --- 13) Environmental Impact ---
     total_fossil = 350 * kwp
     total_trees  = 2 * kwp
     total_co2    = 0.85 * kwp
@@ -125,9 +130,9 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill):
         "new_monthly": round(new_monthly_bill, 0),
         "roi_cash": roi_cash,
         "roi_cc": roi_cc,
-        "save_per_pv": round(yearly_saving / no_panels if no_panels else 0, 2),
+        "save_per_pv": round(save_per_pv, 2),
         "kwp_installed": round(kwp, 2),
-        "kwac": round(kwp * 0.9, 2),
+        "kwac": round(kwac, 2),
         "cost_cash": cost_cash,
         "cost_cc": round(cost_cc, 2),
         "om_fee_monthly": round(om_fee_monthly, 0),
@@ -151,114 +156,135 @@ def get_energy_charge_rate(monthly_bill):
 
 # === PDF GENERATOR ===
 def build_pdf(bill, raw_needed, pkg, c, no_sun_days):
+    # helper: make a safe float from many display formats ("38,880", "RM 38,880", "5.2 yrs")
+    def clean_number(x):
+        if x is None:
+            return 0.0
+        if isinstance(x, (int, float)):
+            return float(x)
+        if isinstance(x, str):
+            s = x.strip()
+            # remove currency label, percent, years text, commas and parentheses
+            s = s.replace("RM", "").replace("rm", "")
+            s = s.replace("%", "").replace("yrs", "").replace("year", "")
+            s = s.replace("(", "").replace(")", "")
+            s = s.replace(",", "")
+            s = s.strip()
+            if s == "":
+                return 0.0
+            # if it's something like "38 880" remove spaces
+            s = re.sub(r"\s+", "", s)
+            try:
+                return float(s)
+            except Exception:
+                # fallback: remove any non-digit/decimal minus sign and try again
+                s2 = re.sub(r"[^0-9.\-]+", "", s)
+                try:
+                    return float(s2) if s2 not in ("", "-", ".") else 0.0
+                except Exception:
+                    return 0.0
+        return 0.0
+
+    # safe getters for c dict with fallback
+    def get_str(key, fmt="{:s}"):
+        v = c.get(key)
+        return fmt.format(str(v)) if v is not None else ""
+
+    def get_num(key):
+        return clean_number(c.get(key))
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
     # Title
-    pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "Solar Savings Report", ln=1, align="C")
-    pdf.ln(4)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 12, "Solar Savings Report", ln=1, align="C")
+    pdf.ln(6)
 
-    # User inputs
+    # User inputs (left column/right column)
     pdf.set_font("Helvetica", size=12)
     pdf.set_fill_color(240,240,240)
-    pdf.cell(90, 8, "Monthly Bill (MYR)", border=1, fill=True)
-    pdf.cell(90, 8, f"{bill:.2f}", border=1, ln=1)
-    pdf.cell(90, 8, "No-Sun Days/Month", border=1, fill=True)
-    pdf.cell(90, 8, f"{no_sun_days}", border=1, ln=1)
-    pdf.cell(90, 8, "Panels Needed", border=1, fill=True)
-    pdf.cell(90, 8, f"{raw_needed}", border=1, ln=1)
-    pdf.cell(90, 8, "Package Qty", border=1, fill=True)
-    pdf.cell(90, 8, f"{pkg}", border=1, ln=1)
 
+    inputs = [
+        ("Monthly Bill (MYR)", f"{float(bill):,.2f}" if bill not in (None, "") else "0.00"),
+        ("No-Sun Days/Month", str(no_sun_days)),
+        ("Panels Needed", str(raw_needed)),
+        ("Package Qty", str(pkg))
+    ]
+    for i,(label,val) in enumerate(inputs):
+        fill = True if i % 2 == 0 else False
+        pdf.cell(90, 8, label, border=1, fill=fill)
+        pdf.cell(90, 8, val, border=1, ln=1, fill=fill)
     pdf.ln(6)
-    # Key Metrics header
+
+    # Key Metrics
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 8, "Key Metrics", ln=1)
     pdf.set_font("Helvetica", size=12)
     colw = pdf.w/2 - 20
 
-    # Row 1
-    pdf.set_fill_color(245,245,245)
-    pdf.cell(colw, 8, "Consumption (kWh/mo)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('monthly_kwh',0):.2f}", border=1, ln=1)
-    # Row 2
-    pdf.set_fill_color(255,255,255)
-    pdf.cell(colw, 8, "Monthly Gen (kWh)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('monthly_gen',0):.2f}", border=1, ln=1)
-    # Row 3
-    pdf.set_fill_color(245,245,245)
-    pdf.cell(colw, 8, "Unit Rate (RM/kWh)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('unit_rate',0):.2f}", border=1, ln=1)
-    # Row 4
-    pdf.set_fill_color(255,255,255)
-    pdf.cell(colw, 8, "Retail Charge (RM/mo)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('retail_charge',0):.2f}", border=1, ln=1)
-    # Row 5
-    pdf.set_fill_color(245,245,245)
-    pdf.cell(colw, 8, "Monthly Savings (RM)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('monthly_save',0):.2f}", border=1, ln=1)
-    # Row 6
-    pdf.set_fill_color(255,255,255)
-    pdf.cell(colw, 8, "Saving per PV (RM)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('save_per_pv',0):.2f}", border=1, ln=1)
-    # Row 7
-    pdf.set_fill_color(245,245,245)
-    pdf.cell(colw, 8, "O&M Fee (RM/mo)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('om_fee_monthly',0):.2f}", border=1, ln=1)
-    # Row 8
-    pdf.set_fill_color(255,255,255)
-    pdf.cell(colw, 8, "New Bill After Solar (RM)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('new_monthly',0):.2f}", border=1, ln=1)
+    metrics = [
+        ("Consumption (kWh/mo)", f"{get_num('monthly_kwh') :,.2f}"),
+        ("Monthly Gen (kWh)", f"{get_num('monthly_gen') :,.2f}" if 'monthly_gen' in c else f"{get_num('Daily Yield (kWh)')*30:,.2f}"),
+        ("Unit Rate (RM/kWh)", f"{get_num('unit_rate') :,.2f}"),
+        ("Retail Charge (RM/mo)", f"{get_num('retail_charge') :,.2f}"),
+        ("Monthly Savings (RM)", f"{get_num('Monthly Saving (RM)') :,.2f}" if 'Monthly Saving (RM)' in c else f"{get_num('Monthly Saving (RM)') :,.2f}"),
+        ("O&M Fee (RM/mo)", f"{get_num('om_fee_monthly') :,.2f}"),
+        ("New Bill After Solar (RM)", f"{get_num('new_monthly') :,.2f}")
+    ]
 
+    for i,(label,val) in enumerate(metrics):
+        fill = (i % 2 == 0)
+        pdf.set_fill_color(245,245,245 if fill else 255)
+        pdf.cell(colw, 8, label, border=1, fill=fill)
+        pdf.cell(colw, 8, val, border=1, ln=1, fill=fill)
     pdf.ln(6)
-    # Financial Summary header
+
+    # Financial Summary
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 8, "Financial Summary", ln=1)
     pdf.set_font("Helvetica", size=12)
 
-    # Fin row 1
-    pdf.set_fill_color(245,245,245)
-    pdf.cell(colw, 8, "ROI (Cash)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('roi_cash',0):.2f}%", border=1, ln=1)
-    # Fin row 2
-    pdf.set_fill_color(255,255,255)
-    pdf.cell(colw, 8, "ROI (CC)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('roi_cc',0):.2f}%", border=1, ln=1)
-    # Fin row 3
-    pdf.set_fill_color(245,245,245)
-    pdf.cell(colw, 8, "Payback (Cash)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('payback_cash',0):.2f} yrs", border=1, ln=1)
-    # Fin row 4
-    pdf.set_fill_color(255,255,255)
-    pdf.cell(colw, 8, "Payback (CC)", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('payback_cc',0):.2f} yrs", border=1, ln=1)
-    # Fin row 5
-    pdf.set_fill_color(245,245,245)
-    pdf.cell(colw, 8, "3-Year Installment", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('inst_3yr',0):.2f}/mo", border=1, ln=1)
-    # Fin row 6
-    pdf.set_fill_color(255,255,255)
-    pdf.cell(colw, 8, "5-Year Installment", border=1, fill=True)
-    pdf.cell(colw, 8, f"{c.get('inst_5yr',0):.2f}/mo", border=1, ln=1)
+    fin = [
+        ("Estimated Total Sav/Month", f"RM {get_num('Monthly Saving (RM)') :,.2f}"),
+        ("Estimated Total Sav/Year", f"RM {get_num('Yearly Saving (RM)') :,.2f}"),
+        ("Total Cost (Cash)", f"RM {get_num('cost_cash') :,.2f}" if 'cost_cash' in c else get_str("Total Cost (RM)", "{:s}")),
+        ("Installment (8% Interest) (Total)", f"RM {get_num('Installment 8% Interests') :,.2f}"),
+        ("Installment (4 Years) (Monthly)", f"RM {get_num('Installment 4 Years (RM)') :,.2f}"),
+        ("Estimated ROI (Cash) (yrs)", f"{get_num('roi_cash') :,.2f}"),
+        ("Estimated ROI (CC) (yrs)", f"{get_num('roi_cc') :,.2f}")
+    ]
 
+    for i,(label,val) in enumerate(fin):
+        fill = (i % 2 == 0)
+        pdf.set_fill_color(245,245,245 if fill else 255)
+        pdf.cell(colw, 8, label, border=1, fill=fill)
+        pdf.cell(colw, 8, val, border=1, ln=1, fill=fill)
     pdf.ln(6)
-    # Environmental header
+
+    # Environmental Benefits
     pdf.set_font("Helvetica", "B", 14)
     pdf.cell(0, 8, "Environmental Benefits", ln=1)
     pdf.set_font("Helvetica", size=12)
 
-    pdf.set_fill_color(240,240,240)
-    pdf.cell(90, 8, "Fossil Fuel Saved (kg)", border=1, fill=True)
-    pdf.cell(90, 8, f"{c.get('total_fossil',0):.2f}", border=1, ln=1)
-    pdf.cell(90, 8, "Trees Saved", border=1, fill=True)
-    pdf.cell(90, 8, f"{c.get('total_trees',0):.2f}", border=1, ln=1)
-    pdf.cell(90, 8, "CO2 Avoided (t)", border=1, fill=True)
-    pdf.cell(90, 8, f"{c.get('total_co2',0):.2f}", border=1, ln=1)
+    env = [
+        ("Fossil Fuel Saved (kg)", f"{get_num('total_fossil') :,.2f}"),
+        ("Trees Saved", f"{get_num('total_trees') :,.2f}"),
+        ("CO2 Avoided (t)", f"{get_num('total_co2') :,.2f}")
+    ]
+    for i,(label,val) in enumerate(env):
+        fill = (i % 2 == 0)
+        pdf.set_fill_color(240,240,240 if fill else 255)
+        pdf.cell(90, 8, label, border=1, fill=fill)
+        pdf.cell(90, 8, val, border=1, ln=1, fill=fill)
 
-    # Return PDF as BytesIO
-    return io.BytesIO(pdf.output(dest='S').encode('latin-1'))
+    # Footer note
+    pdf.ln(8)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.multi_cell(0, 5, "Note: Figures are estimates. Actual results depend on site conditions, weather and system performance.", align="L")
+
+    return io.BytesIO(pdf.output(dest="S").encode("latin-1"))
 
 def main():
     st.title("☀️ Solar Savings Calculator")
@@ -341,20 +367,30 @@ def main():
         # (assuming you've already collected 'bill' earlier)
         # Example: bill = st.number_input("Enter your average monthly bill (RM):", min_value=0.0, step=10.0)
 
-        # --- Step 1: Calculate energy-only portion to offset ---
-        energy_portion = bill * ENERGY_CHARGE_RATIO
+        # --- Step 1: Estimate total kWh consumption from bill ---
+        avg_tariff_all = 0.4333  # average overall tariff (energy + other charges)
+        est_kwh = bill / avg_tariff_all
 
-        # --- Step 1: Calculate energy-only portion to offset ---
+        # --- Step 2: Get correct energy charge rate based on usage ---
         TARIFF_ENERGY = get_energy_charge_rate(bill)
 
-        # --- Step 3: Convert to required kWp (solar size needed) ---
-        rec_kwp = energy_portion / (sunlight_hours * DAILY_USAGE_RATIO * TARIFF_ENERGY * 30)
+        # --- Step 3: Energy charge portion (RM and kWh) ---
+        ENERGY_CHARGE_RATIO = 0.6  # assume 60% of bill is energy charge
+        energy_portion_rm = bill * ENERGY_CHARGE_RATIO
+        target_kwh = energy_portion_rm / TARIFF_ENERGY  # how much solar needs to offset
 
-        # --- Step 4: Convert kWp to number of panels ---
-        raw_needed = math.ceil(rec_kwp * 1000 / PANEL_WATT)
+        # --- Step 4: Calculate per-panel production ---
+        sunlight_hours = 3.5
+        DAILY_USAGE_RATIO = 0.7
+        PANEL_WATT = 640
+
+        per_panel_monthly_kwh = (PANEL_WATT / 1000) * sunlight_hours * DAILY_USAGE_RATIO * 30
+
+        # --- Step 5: Determine number of panels needed ---
+        raw_needed = math.ceil(target_kwh / per_panel_monthly_kwh)
         recommended = min(max(raw_needed, 10), 100)
 
-        # --- Step 5: Show slider ---
+        # --- Step 6: Slider for user adjustment ---
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
@@ -364,7 +400,7 @@ def main():
             help=f"Recommended to offset ~60% (energy charge portion) of your RM {bill:.0f} monthly bill."
         )
 
-        # --- Step 6: Info text ---
+        # --- Step 7: Display message ---
         st.markdown(
             f"""
             <p style='color: #555; font-size: 14px;'>
@@ -406,17 +442,32 @@ def main():
         .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(160px,1fr));
-            gap: 12px;
+            gap: 14px;
             margin: 16px 0;
         }
         .card {
             background: #fff;
-            border-radius: 8px;
-            padding: 12px;
+            border-radius: 10px;
+            padding: 12px 14px;
             box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            height: 90px; /* ✅ Fixed height for alignment */
         }
-        .card .title { font-size:0.8rem; color:#666; margin-bottom:4px; }
-        .card .value { font-size:1.1rem; font-weight:600; color:#222; }
+        .card .title {
+            font-size: 0.8rem;
+            color: #666;
+            margin-bottom: 6px;
+            line-height: 1.2;
+            white-space: normal;
+        }
+        .card .value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #222;
+            line-height: 1.2;
+        }
         </style>
         """, unsafe_allow_html=True)
 
