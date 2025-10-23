@@ -49,40 +49,33 @@ MICROINV_UNITS   = 5.0        # units
 
 
 def calculate_values(no_panels, sunlight_hours, monthly_bill):
-    # --- Basic setup ---
-    monthly_bill = float(monthly_bill) if monthly_bill else 0
+    monthly_bill = float(monthly_bill) if monthly_bill else 0.0
 
-    # --- 1) Energy-charge portion only (60%) ---
-    energy_charge_portion = monthly_bill * ENERGY_CHARGE_RATIO  # e.g. 60% of total bill
+    # Energy tariff (RM/kWh) for conversion from kWh -> RM for savings
+    TARIFF_ENERGY = get_energy_charge_rate(monthly_bill)
 
-    # --- 2) System size ---
-    kwp = no_panels * PANEL_WATT / 1000
+    # System size
+    kwp = no_panels * PANEL_WATT / 1000.0
 
-    # --- 3) Daily yield ---
+    # Per-panel production (total monthly)
+    per_panel_monthly_total = (PANEL_WATT / 1000.0) * sunlight_hours * 30.0
+    # Daytime portion of generation (what the house can use directly)
+    per_panel_daytime_kwh = per_panel_monthly_total * DAILY_USAGE_RATIO
+
+    # Daily & monthly yields
     daily_yield = kwp * sunlight_hours
-
-    # --- 4) Daytime saving (70% of yield) ---
     daytime_kwh = daily_yield * DAILY_USAGE_RATIO
-    daytime_rm = daytime_kwh * GENERAL_TARIFF
+    daily_saving = daytime_kwh * TARIFF_ENERGY  # RM/day from daytime self-consumption
+    monthly_saving = daily_saving * 30.0        # RM/month (generation-driven)
 
-    # --- 5) Raw solar savings ---
-    daily_saving = daytime_rm
-    monthly_saving_raw = daily_saving * 30
-    yearly_saving_raw = monthly_saving_raw * 12
+    # For transparency, also provide generation numbers:
+    monthly_gen_kwh = no_panels * per_panel_monthly_total
+    monthly_gen_daytime_kwh = no_panels * per_panel_daytime_kwh
 
-    # --- 6) Cap monthly saving so it cannot exceed energy-charge portion ---
-    monthly_saving = daily_saving * 30
-    yearly_saving = monthly_saving * 12
-
-    # --- 7) New monthly bill (cannot go below non-energy charge) ---
+    # New monthly bill (do not cap unless you want to)
     new_monthly_bill = monthly_bill - monthly_saving
-    if new_monthly_bill < monthly_bill * (1 - ENERGY_CHARGE_RATIO):
-        new_monthly_bill = monthly_bill * (1 - ENERGY_CHARGE_RATIO)
 
-    # --- 8) Estimate total monthly kWh ---
-    monthly_kwh = monthly_bill / GENERAL_TARIFF if GENERAL_TARIFF else 0
-
-    # --- 9) Cost tiers ---
+    # Cost tiers
     if no_panels < 10:
         cost_cash = 17000
     elif 10 <= no_panels <= 19:
@@ -92,53 +85,53 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill):
     else:
         cost_cash = 58000
 
-    cost_cc = cost_cash + 2000
+    # Installments (8% total interest in your previous logic)
+    installment_total = cost_cash * (1 + INTEREST_RATE)  # total with interest
+    installment_4yrs = installment_total / (INSTALLMENT_YEARS * 12)
 
-    # --- 10) Performance ---
-    save_per_pv = yearly_saving / no_panels if no_panels else 0
-    inverter_efficiency = 0.9
-    kwac = kwp * inverter_efficiency
+    # ROI and Payback: use yearly saving based on generation-driven monthly_saving
+    yearly_saving = monthly_saving * 12.0
+    roi_cash = cost_cash / yearly_saving if yearly_saving else float("inf")
+    roi_cc = installment_total / yearly_saving if yearly_saving else float("inf")
 
-    # --- 11) Installments ---
-    installment_interest = cost_cash * (1 + INTEREST_RATE)
-    installment_4yrs = installment_interest / (INSTALLMENT_YEARS * 12)
-    cost_cc = installment_interest
+    save_per_pv = yearly_saving / no_panels if no_panels else 0.0
 
-    # --- 12) ROI & O&M ---
-    roi_cash = cost_cash / yearly_saving if yearly_saving else 0
-    roi_cc = cost_cc / yearly_saving if yearly_saving else 0
-    om_fee_monthly = cost_cash * 0.01 / 12  # 1% per year
-
-    # --- 13) Environmental Impact ---
+    # Environmental
     total_fossil = 350 * kwp
-    total_trees  = 2 * kwp
-    total_co2    = 0.85 * kwp
+    total_trees = 2 * kwp
+    total_co2 = 0.85 * kwp
 
     return {
         "No Panels": no_panels,
         "kWp": round(kwp, 2),
         "Daily Yield (kWh)": round(daily_yield, 2),
         "Daytime Saving (kWh)": round(daytime_kwh, 2),
-        "Daytime Saving (RM)": round(daytime_rm, 2),
+        "Daytime Saving (RM)": round(daily_saving, 2),
         "Daily Saving (RM)": round(daily_saving, 2),
-        "Monthly Saving (RM)": round(monthly_saving, 0),
-        "Yearly Saving (RM)": round(yearly_saving, 0),
+        "Monthly Saving (RM)": round(monthly_saving, 2),
+        "Yearly Saving (RM)": round(yearly_saving, 2),
         "Total Cost (RM)": f"{int(cost_cash):,}",
-        "Installment 8% Interests": f"{int(installment_interest):,}",
+        "Installment 8% Interests": f"{int(installment_total):,}",
         "Installment 4 Years (RM)": round(installment_4yrs, 1),
-        "monthly_kwh": round(monthly_kwh, 2),
-        "new_monthly": round(new_monthly_bill, 0),
-        "roi_cash": roi_cash,
-        "roi_cc": roi_cc,
+        "monthly_kwh": round(monthly_gen_kwh, 2),
+        "new_monthly": round(new_monthly_bill, 2),
+        "roi_cash": round(roi_cash, 2) if yearly_saving else 0.0,
+        "roi_cc": round(roi_cc, 2) if yearly_saving else 0.0,
         "save_per_pv": round(save_per_pv, 2),
         "kwp_installed": round(kwp, 2),
-        "kwac": round(kwac, 2),
+        "kwac": round(kwp * 0.9, 2),
         "cost_cash": cost_cash,
-        "cost_cc": round(cost_cc, 2),
-        "om_fee_monthly": round(om_fee_monthly, 0),
+        "cost_cc": round(installment_total, 2),
+        "om_fee_monthly": round(cost_cash * 0.01 / 12, 0),
         "total_fossil": round(total_fossil, 2),
         "total_trees": round(total_trees, 2),
         "total_co2": round(total_co2, 2),
+        # expose intermediate numbers for debugging
+        "per_panel_monthly_total": round(per_panel_monthly_total, 3),
+        "per_panel_daytime_kwh": round(per_panel_daytime_kwh, 3),
+        "monthly_gen_kwh": round(monthly_gen_kwh, 2),
+        "monthly_gen_daytime_kwh": round(monthly_gen_daytime_kwh, 2),
+        "tariff_energy": TARIFF_ENERGY,
     }
 
 def get_energy_charge_rate(monthly_bill):
@@ -291,9 +284,6 @@ def main():
 
     if 'calculated' not in st.session_state:
         st.session_state.calculated = False
-    
-    # --- Default sunlight hours ---
-    default_sunlight = 3.5
 
     # === two columns: left for image, right for form ===
     col_img, col_form = st.columns([1, 1])
@@ -376,29 +366,25 @@ def main():
         # (assuming you've already collected 'bill' earlier)
         # Example: bill = st.number_input("Enter your average monthly bill (RM):", min_value=0.0, step=10.0)
 
-        # --- Step 1: Estimate total kWh consumption from bill ---
-        avg_tariff_all = 0.4333  # average overall tariff (energy + other charges)
-        est_kwh = bill / avg_tariff_all
+        # --- Step 1: Energy-charge portion (RM) ---
+        ENERGY_CHARGE_RATIO = 0.6
+        energy_portion_rm = bill * ENERGY_CHARGE_RATIO
 
-        # --- Step 2: Get correct energy charge rate based on usage ---
+        # --- Step 2: Energy tariff (RM/kWh) based on consumption ---
         TARIFF_ENERGY = get_energy_charge_rate(bill)
 
-        # --- Step 3: Energy charge portion (RM and kWh) ---
-        ENERGY_CHARGE_RATIO = 0.6  # assume 60% of bill is energy charge
-        energy_portion_rm = bill * ENERGY_CHARGE_RATIO
-        target_kwh = energy_portion_rm / TARIFF_ENERGY  # how much solar needs to offset
+        # --- Step 3: target kWh to offset (monthly) ---
+        target_kwh = energy_portion_rm / TARIFF_ENERGY
 
-        # --- Step 4: Calculate per-panel production ---
-        DAILY_USAGE_RATIO = 0.7
-        PANEL_WATT = 640
+        # --- Step 4: per-panel monthly production (total & daytime) ---
+        per_panel_monthly_total = (PANEL_WATT / 1000) * sunlight_hours * 30
+        per_panel_daytime_kwh = per_panel_monthly_total * DAILY_USAGE_RATIO
 
-        per_panel_monthly_kwh = (PANEL_WATT / 1000) * sunlight_hours * DAILY_USAGE_RATIO * 30
-
-        # --- Step 5: Determine number of panels needed ---
-        raw_needed = math.ceil(target_kwh / per_panel_monthly_kwh)
+        # --- Step 5: panels needed to offset the energy portion ---
+        raw_needed = math.ceil(target_kwh / per_panel_daytime_kwh)
         recommended = min(max(raw_needed, 10), 100)
 
-        # --- Step 6: Slider for user adjustment ---
+        # --- Step 6: slider ---
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
@@ -408,14 +394,9 @@ def main():
             help=f"Recommended to offset ~60% (energy charge portion) of your RM {bill:.0f} monthly bill."
         )
 
-        # --- Step 7: Display message ---
+        # Info text below slider
         st.markdown(
-            f"""
-            <p style='color: #555; font-size: 14px;'>
-            💡 Based on your RM {bill:.0f} monthly bill, approximately 
-            <b>{recommended}</b> solar panels are recommended to offset your <b>energy charge (60%)</b>.<br>
-            </p>
-            """,
+            f"<p style='color:#555;'>💡 Based on RM {bill:.0f} and {sunlight_hours} h/day, recommended ≈ <b>{recommended}</b> panels to offset energy charge (60%).</p>",
             unsafe_allow_html=True
         )
 
