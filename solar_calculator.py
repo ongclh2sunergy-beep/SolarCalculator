@@ -81,7 +81,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill):
     yearly_saving = monthly_saving * 12.0
 
     # --- Step 7: New monthly bill ---
-    new_monthly_bill = monthly_bill - monthly_saving
+    new_monthly_bill = max(0, monthly_bill - monthly_saving)
 
     # --- Step 8: Cost tiers ---
     if no_panels < 10:
@@ -426,7 +426,7 @@ def main():
         c["ROI CC (%)"]   = c["roi_cc"]
 
         # --- 4) O&M rounding logic ---
-        raw_sav   = float(c["Monthly Saving (RM)"])
+        raw_sav = float(str(c["Monthly Saving (RM)"]).replace(",", ""))
         rem       = raw_sav % 100
         base_hund = raw_sav - rem
 
