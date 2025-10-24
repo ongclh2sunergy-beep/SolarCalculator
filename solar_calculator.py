@@ -427,7 +427,7 @@ def main():
             <p style='color:#555;'>
             💡 Based on your RM {bill:.0f} monthly bill and {sunlight_hours}h/day sunlight:<br>
             • Applied tariff: <b>RM {GENERAL_TARIFF:.4f}/kWh</b><br>
-            • Energy Charge (60%): <b>RM {energy_portion_rm:.0f}</b> ≈ <b>{target_kwh:.0f} kWh</b><br>
+            • Energy Charge (≈60%): <b>RM {energy_portion_rm:.0f}</b> ≈ <b>{target_kwh:.0f} kWh</b><br>
             • Recommended solar panels: <b>{recommended}</b> pcs<br>
             </p>
             """,
