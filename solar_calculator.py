@@ -420,7 +420,7 @@ def main():
         c = calculate_values(pkg, sunlight_hours if sunlight_hours else 3.5, bill)
 
         # --- 3) Override financial data ---
-        c["Cost Cash (RM)"] = float(c["Total Cost (RM)"].replace(',', ''))
+        c["Cost Cash (RM)"] = float(c["Total Cost (RM)"].replace(',', ""))
         c["Cost CC (RM)"]   = c["cost_cc"]
         c["ROI Cash (%)"] = c["roi_cash"]
         c["ROI CC (%)"]   = c["roi_cc"]
