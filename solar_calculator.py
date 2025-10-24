@@ -51,39 +51,50 @@ MICROINV_UNITS   = 5.0        # units
 def calculate_values(no_panels, sunlight_hours, monthly_bill):
     monthly_bill = float(monthly_bill) if monthly_bill else 0.0
 
-    # --- Step 1: Fixed tariff and offset settings ---
-    GENERAL_TARIFF = 0.4333   # fixed tariff
-    ENERGY_OFFSET_RATIO = 0.6 # assume 60% of bill offset by solar
-    ENERGY_TARIFF = GENERAL_TARIFF
+    # --- Step 1: Tariff selection based on bill ---
+    if monthly_bill <= 666.45:
+        GENERAL_TARIFF = 0.4443
+    elif monthly_bill >= 816.45:
+        GENERAL_TARIFF = 0.5443
+    else:
+        # Bill is in the "invalid" middle range — return empty result
+        return {
+            "No Panels": no_panels,
+            "general_tariff": "Invalid range (666.45–816.45)",
+            "monthly_bill_warning": "Please enter a bill below RM 666.45 or above RM 816.45"
+        }
 
-    # --- Step 2: Estimate total consumption ---
+    # --- Step 2: Fixed parameters ---
+    ENERGY_OFFSET_RATIO = 0.6  # 60% of bill offset by solar
+    ENERGY_TARIFF = GENERAL_TARIFF
+    PANEL_WATT = 640
+    DAILY_USAGE_RATIO = 0.7  # 70% usable during daytime
+
+    # --- Step 3: Estimate total consumption ---
     est_kwh = monthly_bill / GENERAL_TARIFF
 
-    # --- Step 3: Energy portion to offset (60%) ---
+    # --- Step 4: Energy portion to offset (60%) ---
     energy_portion_rm = monthly_bill * ENERGY_OFFSET_RATIO
     target_kwh = energy_portion_rm / GENERAL_TARIFF
 
-    # --- Step 4: Panel and generation assumptions ---
-    PANEL_WATT = 640
-    DAILY_USAGE_RATIO = 0.7  # assume 70% usable during daytime
-
+    # --- Step 5: Panel and generation assumptions ---
     per_panel_monthly_total = (PANEL_WATT / 1000.0) * sunlight_hours * 30.0
     per_panel_daytime_kwh = per_panel_monthly_total * DAILY_USAGE_RATIO
 
-    # --- Step 5: System yield ---
+    # --- Step 6: System yield ---
     kwp = no_panels * PANEL_WATT / 1000.0
     daily_yield = kwp * sunlight_hours
     daytime_kwh = daily_yield * DAILY_USAGE_RATIO
 
-    # --- Step 6: Savings (calculated precisely) ---
+    # --- Step 7: Savings (calculated precisely) ---
     daily_saving = daytime_kwh * GENERAL_TARIFF
     monthly_saving = daily_saving * 30.0
     yearly_saving = monthly_saving * 12.0
 
-    # --- Step 7: New monthly bill ---
+    # --- Step 8: New monthly bill ---
     new_monthly_bill = max(0, monthly_bill - monthly_saving)
 
-    # --- Step 8: Cost tiers ---
+    # --- Step 9: Cost tiers ---
     if no_panels < 10:
         cost_cash = 17000
     elif 10 <= no_panels <= 19:
@@ -93,58 +104,58 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill):
     else:
         cost_cash = 58000
 
-    # --- Step 9: Installments (8% interest) ---
+    # --- Step 10: Installments (8% interest) ---
     installment_total = cost_cash * (1 + INTEREST_RATE)
     installment_4yrs = installment_total / (INSTALLMENT_YEARS * 12)
 
-    # --- Step 10: ROI ---
+    # --- Step 11: ROI ---
     roi_cash = cost_cash / yearly_saving if yearly_saving else float("inf")
     roi_cc = installment_total / yearly_saving if yearly_saving else float("inf")
     save_per_pv = yearly_saving / no_panels if no_panels else 0.0
 
-    # --- Step 11: Environmental impact ---
+    # --- Step 12: Environmental impact ---
     total_fossil = 350 * kwp
     total_trees = 2 * kwp
     total_co2 = 0.85 * kwp
 
     return {
-    "No Panels": no_panels,
-    "kWp": f"{kwp:.2f}".rstrip('0').rstrip('.'),
-    "Daily Yield (kWh)": f"{daily_yield:.2f}".rstrip('0').rstrip('.'),
-    "Daytime Saving (kWh)": f"{daytime_kwh:.2f}".rstrip('0').rstrip('.'),
+        "No Panels": no_panels,
+        "kWp": f"{kwp:.2f}".rstrip('0').rstrip('.'),
+        "Daily Yield (kWh)": f"{daily_yield:.2f}".rstrip('0').rstrip('.'),
+        "Daytime Saving (kWh)": f"{daytime_kwh:.2f}".rstrip('0').rstrip('.'),
 
-    # RM values – half-up rounding, no decimals shown
-    "Daytime Saving (RM)": f"{math.floor(daily_saving + 0.5):,}",
-    "Daily Saving (RM)": f"{math.floor(daily_saving + 0.5):,}",
-    "Monthly Saving (RM)": f"{math.floor(monthly_saving + 0.5):,}",
-    "Yearly Saving (RM)": f"{math.floor(yearly_saving + 0.5):,}",
-    "Total Cost (RM)": f"{math.floor(cost_cash + 0.5):,}",
-    "Installment 8% Interests": f"{math.floor(installment_total + 0.5):,}",
-    "Installment 4 Years (RM)": f"{math.floor(installment_4yrs + 0.5):,}",
-    "monthly_gen_kwh": f"{math.floor(no_panels * per_panel_monthly_total + 0.5):,}",
-    "monthly_kwh": f"{est_kwh:.2f}",
-    "monthly_gen_daytime_kwh": f"{math.floor(no_panels * per_panel_daytime_kwh + 0.5):,}",
-    "new_monthly": f"{math.floor(new_monthly_bill + 0.5):,}",
-    "roi_cash": f"{roi_cash:.2f}".rstrip('0').rstrip('.'),
-    "roi_cc": f"{roi_cc:.2f}".rstrip('0').rstrip('.'),
-    "save_per_pv": f"{math.floor(save_per_pv + 0.5):,}",
-    "kwp_installed": f"{kwp:.2f}".rstrip('0').rstrip('.'),
-    "kwac": f"{(kwp * 0.9):.2f}".rstrip('0').rstrip('.'),
-    "cost_cash": f"{math.floor(cost_cash + 0.5):,}",
-    "cost_cc": f"{math.floor(installment_total + 0.5):,}",
-    "om_fee_monthly": f"{math.floor(cost_cash * 0.01 / 12 + 0.5):,}",
-    "total_fossil": f"{math.floor(total_fossil + 0.5):,}",
-    "total_trees": f"{math.floor(total_trees + 0.5):,}",
-    "total_co2": f"{math.floor(total_co2 + 0.5):,}",
+        # RM values – half-up rounding, no decimals shown
+        "Daytime Saving (RM)": f"{math.floor(daily_saving + 0.5):,}",
+        "Daily Saving (RM)": f"{math.floor(daily_saving + 0.5):,}",
+        "Monthly Saving (RM)": f"{math.floor(monthly_saving + 0.5):,}",
+        "Yearly Saving (RM)": f"{math.floor(yearly_saving + 0.5):,}",
+        "Total Cost (RM)": f"{math.floor(cost_cash + 0.5):,}",
+        "Installment 8% Interests": f"{math.floor(installment_total + 0.5):,}",
+        "Installment 4 Years (RM)": f"{installment_4yrs:,.2f}",
+        "monthly_gen_kwh": f"{math.floor(no_panels * per_panel_monthly_total + 0.5):,}",
+        "monthly_kwh": f"{est_kwh:.2f}",
+        "monthly_gen_daytime_kwh": f"{math.floor(no_panels * per_panel_daytime_kwh + 0.5):,}",
+        "new_monthly": f"{math.floor(new_monthly_bill + 0.5):,}",
+        "roi_cash": f"{roi_cash:.2f}".rstrip('0').rstrip('.'),
+        "roi_cc": f"{roi_cc:.2f}".rstrip('0').rstrip('.'),
+        "save_per_pv": f"{math.floor(save_per_pv + 0.5):,}",
+        "kwp_installed": f"{kwp:.2f}".rstrip('0').rstrip('.'),
+        "kwac": f"{(kwp * 0.9):.2f}".rstrip('0').rstrip('.'),
+        "cost_cash": f"{math.floor(cost_cash + 0.5):,}",
+        "cost_cc": f"{math.floor(installment_total + 0.5):,}",
+        "om_fee_monthly": f"{math.floor(cost_cash * 0.01 / 12 + 0.5):,}",
+        "total_fossil": f"{math.floor(total_fossil + 0.5):,}",
+        "total_trees": f"{math.floor(total_trees + 0.5):,}",
+        "total_co2": f"{math.floor(total_co2 + 0.5):,}",
 
-    # Debug info
-    "general_tariff": f"{GENERAL_TARIFF:.4f}",
-    "energy_tariff": f"{ENERGY_TARIFF:.4f}",
-    "energy_portion_rm": f"{math.floor(energy_portion_rm + 0.5):,}",
-    "target_kwh": f"{math.floor(target_kwh + 0.5):,}",
-    "per_panel_monthly_total": f"{per_panel_monthly_total:.2f}".rstrip('0').rstrip('.'),
-    "per_panel_daytime_kwh": f"{per_panel_daytime_kwh:.2f}".rstrip('0').rstrip('.'),
-}
+        # Debug info
+        "general_tariff": f"{GENERAL_TARIFF:.4f}",
+        "energy_tariff": f"{ENERGY_TARIFF:.4f}",
+        "energy_portion_rm": f"{math.floor(energy_portion_rm + 0.5):,}",
+        "target_kwh": f"{math.floor(target_kwh + 0.5):,}",
+        "per_panel_monthly_total": f"{per_panel_monthly_total:.2f}".rstrip('0').rstrip('.'),
+        "per_panel_daytime_kwh": f"{per_panel_daytime_kwh:.2f}".rstrip('0').rstrip('.'),
+    }
 
 def get_energy_charge_rate(monthly_bill):
     """
@@ -304,7 +315,9 @@ def main():
         with st.form("solar_form"):
             bill_input = st.text_input(
                 "Monthly Electricity Bill (MYR):",
-                key="bill_input"
+                key="bill_input",
+                placeholder="Below 666.45 or above 816.45",
+                help="Please enter a bill amount below RM 666.45 or above RM 816.45"
             )
             bill_input = float(bill_input) if bill_input else 0
             submitted = st.form_submit_button("Calculate")
@@ -322,7 +335,7 @@ def main():
             "BP/Muar":       3.56,
             "Kuala Lumpur":  3.62,
             "North":         3.75,
-            "Other (Default 3.5 h/day)": 3.5
+            "Default": 3.5
         }
 
         # Default 3.5 hours/day if nothing selected
@@ -336,7 +349,7 @@ def main():
         sunlight_hours = area_sun_map.get(selected_area, 3.5)
 
         st.markdown(
-            f"<p style='color:#555; font-size:14px;'>☀️ Average sunlight hours for <b>{selected_area}</b>: <b>{sunlight_hours} hours/day</b></p>",
+            f"<p style='color:#555; font-size:14px;'>☀️ Sunlight hours for <b>{selected_area}</b>: <b>{sunlight_hours} hours/day</b></p>",
             unsafe_allow_html=True
         )
 
@@ -369,28 +382,36 @@ def main():
         # (assuming you've already collected 'bill' earlier)
         # Example: bill = st.number_input("Enter your average monthly bill (RM):", min_value=0.0, step=10.0)
 
-        # --- Step 1: Use fixed average tariff ---
-        GENERAL_TARIFF = 0.4333  # RM/kWh
+        # --- Step 2: Select tariff based on bill ---
+        if bill <= 666.45:
+            GENERAL_TARIFF = 0.4443  # RM/kWh for low usage
+        elif bill >= 816.45:
+            GENERAL_TARIFF = 0.5443  # RM/kWh for high usage
+        else:
+            st.warning("⚠️ Please enter a bill below RM 666.45 or above RM 816.45.")
+            st.stop()
+
+        # --- Step 3: Other constants ---
         ENERGY_OFFSET_RATIO = 0.6  # 60% of bill offsettable
         PANEL_WATT = 640
         DAILY_USAGE_RATIO = 0.7
 
-        # --- Step 2: Estimate monthly consumption ---
+        # --- Step 4: Estimate monthly consumption ---
         est_kwh = bill / GENERAL_TARIFF  # total monthly usage in kWh
 
-        # --- Step 3: Energy portion to offset (60%) ---
+        # --- Step 5: Energy portion to offset (60%) ---
         energy_portion_rm = bill * ENERGY_OFFSET_RATIO
         target_kwh = energy_portion_rm / GENERAL_TARIFF
 
-        # --- Step 4: Per-panel generation (daytime only) ---
+        # --- Step 6: Per-panel generation (daytime only) ---
         per_panel_monthly_total = (PANEL_WATT / 1000) * sunlight_hours * 30
         per_panel_daytime_kwh = per_panel_monthly_total * DAILY_USAGE_RATIO
 
-        # --- Step 5: Determine number of panels needed ---
+        # --- Step 7: Determine number of panels needed ---
         raw_needed = math.ceil(target_kwh / per_panel_daytime_kwh)
         recommended = min(max(raw_needed, 10), 100)
 
-        # --- Step 6: Panel slider ---
+        # --- Step 8: Panel slider ---
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
@@ -400,15 +421,24 @@ def main():
             help=f"Recommended to offset ~60% (RM {energy_portion_rm:.0f}) of your RM {bill:.0f} monthly bill."
         )
 
-        # --- Step 7: Info display ---
+        # --- Step 9: Info display ---
         st.markdown(
             f"""
             <p style='color:#555;'>
             💡 Based on your RM {bill:.0f} monthly bill and {sunlight_hours}h/day sunlight:<br>
-            • Average tariff: <b>RM {GENERAL_TARIFF:.4f}/kWh</b><br>
-            • Estimated usage: <b>{est_kwh:.0f} kWh/month</b><br>
-            • Offset portion (60%): <b>RM {energy_portion_rm:.0f}</b> ≈ <b>{target_kwh:.0f} kWh</b><br>
+            • Applied tariff: <b>RM {GENERAL_TARIFF:.4f}/kWh</b><br>
+            • Energy Charge (60%): <b>RM {energy_portion_rm:.0f}</b> ≈ <b>{target_kwh:.0f} kWh</b><br>
             • Recommended solar panels: <b>{recommended}</b> pcs<br>
+            </p>
+            """,
+            unsafe_allow_html=True
+        )
+
+        st.markdown(
+            """
+            <p style='color:#777;font-size:13px;'>
+            ⚡ <b>Note:</b> Solar offsets the energy charge only (≈60% of your total bill).<br>
+            Tariff varies by usage: below RM666.45 → RM0.4443/kWh, above RM816.45 → RM0.5443/kWh.<br>
             </p>
             """,
             unsafe_allow_html=True
