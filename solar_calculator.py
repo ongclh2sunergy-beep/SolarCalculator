@@ -169,127 +169,116 @@ def get_energy_charge_rate(monthly_bill):
     else:
         return 0.3703  # Energy charge above 1500 kWh
 
-# === PDF GENERATOR ===
 def build_pdf(bill, raw_needed, pkg, c):
-    import io, re
+    import io, re, urllib.request, os
     from fpdf import FPDF
 
-    # helper: make a safe float from many display formats ("38,880", "RM 38,880", "5.2 yrs")
+    # --- Download logo temporarily ---
+    logo_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvUrQzbNoJwW7pypHZ9yweCafrQtCWeKRjUg&s"
+    logo_path = "company_logo.png"
+    try:
+        urllib.request.urlretrieve(logo_url, logo_path)
+    except Exception:
+        logo_path = None
+
+    # --- Helper: clean number strings ---
     def clean_number(x):
         if x is None:
             return 0.0
         if isinstance(x, (int, float)):
             return float(x)
         if isinstance(x, str):
-            s = x.strip()
-            s = s.replace("RM", "").replace("rm", "").replace("%", "")
-            s = s.replace("yrs", "").replace("year", "").replace("(", "").replace(")", "")
-            s = s.replace(",", "").strip()
-            s = re.sub(r"\s+", "", s)
+            s = re.sub(r"[^\d.\-]", "", x)
             try:
                 return float(s)
-            except Exception:
-                s2 = re.sub(r"[^0-9.\-]+", "", s)
-                try:
-                    return float(s2) if s2 not in ("", "-", ".") else 0.0
-                except Exception:
-                    return 0.0
+            except:
+                return 0.0
         return 0.0
 
-    # safe getters for c dict with fallback
-    def get_str(key, fmt="{:s}"):
-        v = c.get(key)
-        return fmt.format(str(v)) if v is not None else ""
+    def get_num(key): return clean_number(c.get(key))
+    def get_str(key): return str(c.get(key) or "")
 
-    def get_num(key):
-        return clean_number(c.get(key))
-
+    # --- Setup PDF ---
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
-    # Title
+    # === Solar Theme Colors ===
+    COLOR_PRIMARY = (255, 193, 7)     # solar yellow
+    COLOR_SECONDARY = (255, 243, 205) # light background
+    COLOR_TEXT = (60, 60, 60)
+
+    # --- Header with Logo and Title ---
+    header_height = 20
+    if logo_path and os.path.exists(logo_path):
+        pdf.image(logo_path, 10, 6, 25)  # fixed position and size
+    pdf.set_xy(40, 12)
     pdf.set_font("Helvetica", "B", 18)
-    pdf.cell(0, 12, "Solar Savings Report", ln=1, align="C")
-    pdf.ln(6)
+    pdf.set_text_color(255, 165, 0)
+    pdf.cell(0, 10, "Solar Savings Summary", ln=1, align="L")
+    pdf.set_text_color(*COLOR_TEXT)
+    pdf.ln(10)
 
-    # User inputs
-    pdf.set_font("Helvetica", size=12)
-    pdf.set_fill_color(240, 240, 240)
+    # --- Section Helper ---
+    def section_header(title):
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_fill_color(*COLOR_PRIMARY)
+        pdf.cell(0, 8, title, ln=1, align="L", fill=True)
+        pdf.set_font("Helvetica", size=12)
 
+    def add_table(rows, col1_width=95, col2_width=95):
+        for label, val in rows:
+            pdf.set_fill_color(*COLOR_SECONDARY)
+            pdf.cell(col1_width, 8, label, border=1, fill=True)
+            pdf.cell(col2_width, 8, val, border=1, ln=1, fill=True)
+        pdf.ln(4)
+
+    # --- Input Summary ---
+    section_header("Input Summary")
     inputs = [
-        ("Monthly Bill (MYR)", f"{float(bill):,.2f}" if bill not in (None, "") else "0.00"),
+        ("Monthly Bill (MYR)", f"{float(bill):,.2f}" if bill else "0.00"),
         ("Panels Needed", str(raw_needed)),
         ("Package Qty", str(pkg))
     ]
-    for i, (label, val) in enumerate(inputs):
-        fill = True if i % 2 == 0 else False
-        pdf.cell(90, 8, label, border=1, fill=fill)
-        pdf.cell(90, 8, val, border=1, ln=1, fill=fill)
-    pdf.ln(6)
+    add_table(inputs)
 
-    # === Key Metrics ===
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, "Key Metrics", ln=1)
-    pdf.set_font("Helvetica", size=12)
-    colw = pdf.w / 2 - 20
-
+    # --- Key Metrics ---
+    section_header("Key Metrics")
     metrics = [
         ("Consumption (kWh/mo)", f"{get_num('monthly_kwh') :,.2f}"),
-        ("Monthly Gen (kWh)", f"{get_num('monthly_gen') :,.2f}" if 'monthly_gen' in c else f"{get_num('Daily Yield (kWh)') * 30 :,.2f}"),
+        ("Daytime Saving (kWh)", f"{get_num('Daytime Saving (kWh)') :,.2f}"),
+        ("Daily Saving (RM)", f"{get_num('Daily Saving (RM)') :,.2f}"),
         ("Monthly Savings (RM)", f"{get_num('Monthly Saving (RM)') :,.2f}"),
         ("New Bill After Solar (RM)", f"{get_num('new_monthly') :,.2f}")
-    ]
+        ]
+    add_table(metrics)
 
-    for i, (label, val) in enumerate(metrics):
-        fill = (i % 2 == 0)
-        pdf.set_fill_color(245, 245, 245 if fill else 255)
-        pdf.cell(colw, 8, label, border=1, fill=fill)
-        pdf.cell(colw, 8, val, border=1, ln=1, fill=fill)
-    pdf.ln(6)
-
-    # === Financial Summary ===
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, "Financial Summary", ln=1)
-    pdf.set_font("Helvetica", size=12)
-
+    # --- Financial Summary ---
+    section_header("Financial Summary")
     fin = [
         ("Estimated Total Sav/Month", f"RM {get_num('Monthly Saving (RM)') :,.2f}"),
         ("Estimated Total Sav/Year", f"RM {get_num('Yearly Saving (RM)') :,.2f}"),
-        ("Total Cost (Cash)", f"RM {get_num('cost_cash') :,.2f}" if 'cost_cash' in c else get_str("Total Cost (RM)", "{:s}")),
+        ("Total Cost (Cash)", f"RM {get_num('cost_cash') :,.2f}"),
         ("Installment (8% Interest) (Total)", f"RM {get_num('Installment 8% Interests') :,.2f}"),
         ("Installment (4 Years) (Monthly)", f"RM {get_num('Installment 4 Years (RM)') :,.2f}"),
         ("Estimated ROI (Cash) (yrs)", f"{get_num('roi_cash') :,.2f}"),
         ("Estimated ROI (CC) (yrs)", f"{get_num('roi_cc') :,.2f}")
     ]
+    add_table(fin)
 
-    for i, (label, val) in enumerate(fin):
-        fill = (i % 2 == 0)
-        pdf.set_fill_color(245, 245, 245 if fill else 255)
-        pdf.cell(colw, 8, label, border=1, fill=fill)
-        pdf.cell(colw, 8, val, border=1, ln=1, fill=fill)
-    pdf.ln(6)
-
-    # === Environmental Benefits ===
-    pdf.set_font("Helvetica", "B", 14)
-    pdf.cell(0, 8, "Environmental Benefits", ln=1)
-    pdf.set_font("Helvetica", size=12)
-
+    # --- Environmental Benefits ---
+    section_header("Environmental Benefits")
     env = [
         ("Fossil Fuel Saved (kg)", f"{get_num('total_fossil') :,.2f}"),
         ("Trees Saved", f"{get_num('total_trees') :,.2f}"),
         ("CO2 Avoided (t)", f"{get_num('total_co2') :,.2f}")
     ]
-    for i, (label, val) in enumerate(env):
-        fill = (i % 2 == 0)
-        pdf.set_fill_color(240, 240, 240 if fill else 255)
-        pdf.cell(90, 8, label, border=1, fill=fill)
-        pdf.cell(90, 8, val, border=1, ln=1, fill=fill)
+    add_table(env)
 
-    # Footer note
-    pdf.ln(8)
+    # --- Footer ---
     pdf.set_font("Helvetica", "I", 9)
-    pdf.multi_cell(0, 5, "Note: Figures are estimates. Actual results depend on site conditions, weather and system performance.", align="L")
+    pdf.set_text_color(120, 120, 120)
+    pdf.multi_cell(0, 5, "Note: Figures are estimates. Actual results depend on site conditions, weather, and system performance.", align="L")
 
     return io.BytesIO(pdf.output(dest="S").encode("latin-1"))
 
