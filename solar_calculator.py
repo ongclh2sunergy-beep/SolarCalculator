@@ -211,7 +211,7 @@ def build_pdf(bill, raw_needed, pkg, c):
     # --- Header with Logo and Title ---
     header_height = 20
     if logo_path and os.path.exists(logo_path):
-        pdf.image(logo_path, 10, 6, 25)  # fixed position and size
+        pdf.image(logo_path, 10, 4, 25)  # moved logo slightly higher
     pdf.set_xy(40, 12)
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(255, 165, 0)
@@ -247,10 +247,10 @@ def build_pdf(bill, raw_needed, pkg, c):
     metrics = [
         ("Consumption (kWh/mo)", f"{get_num('monthly_kwh') :,.2f}"),
         ("Daytime Saving (kWh)", f"{get_num('Daytime Saving (kWh)') :,.2f}"),
-        ("Daily Saving (RM)", f"{get_num('Daily Saving (RM)') :,.2f}"),
-        ("Monthly Savings (RM)", f"{get_num('Monthly Saving (RM)') :,.2f}"),
+        ("Estimated Daily Saving (RM)", f"{get_num('Daily Saving (RM)') :,.2f}"),
+        ("Estimated Monthly Savings (RM)", f"{get_num('Monthly Saving (RM)') :,.2f}"),
         ("New Bill After Solar (RM)", f"{get_num('new_monthly') :,.2f}")
-        ]
+    ]
     add_table(metrics)
 
     # --- Financial Summary ---
@@ -278,7 +278,13 @@ def build_pdf(bill, raw_needed, pkg, c):
     # --- Footer ---
     pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(120, 120, 120)
-    pdf.multi_cell(0, 5, "Note: Figures are estimates. Actual results depend on site conditions, weather, and system performance.", align="L")
+    pdf.multi_cell(
+        0,
+        5,
+        "Note: Figures are estimates. Actual results depend on site conditions, weather, and system performance.\n"
+        "Note: All savings and impacts are estimated based on 70% daytime usage.",
+        align="L"
+    )
 
     return io.BytesIO(pdf.output(dest="S").encode("latin-1"))
 
