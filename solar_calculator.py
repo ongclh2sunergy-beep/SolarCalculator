@@ -281,8 +281,7 @@ def build_pdf(bill, raw_needed, pkg, c):
     pdf.multi_cell(
         0,
         5,
-        "Note: Figures are estimates. Actual results depend on site conditions, weather, and system performance.\n"
-        "Note: All savings and impacts are estimated based on 70% daytime usage.",
+        "Note: Figures are estimates. Actual results depend on site conditions, weather, and system performance.\n",
         align="L"
     )
 
