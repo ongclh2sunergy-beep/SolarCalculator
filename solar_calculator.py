@@ -254,17 +254,17 @@ def build_pdf(bill, raw_needed, pkg, c):
     add_table(metrics)
 
     # --- Financial Summary ---
-    section_header("Financial Summary")
-    fin = [
-        ("Estimated Total Sav/Month", f"RM {get_num('Monthly Saving (RM)') :,.2f}"),
-        ("Estimated Total Sav/Year", f"RM {get_num('Yearly Saving (RM)') :,.2f}"),
-        ("Total Cost (Cash)", f"RM {get_num('cost_cash') :,.2f}"),
-        ("Installment (8% Interest) (Total)", f"RM {get_num('Installment 8% Interests') :,.2f}"),
-        ("Installment (4 Years) (Monthly)", f"RM {get_num('Installment 4 Years (RM)') :,.2f}"),
-        ("Estimated ROI (Cash) (yrs)", f"{get_num('roi_cash') :,.2f}"),
-        ("Estimated ROI (CC) (yrs)", f"{get_num('roi_cc') :,.2f}")
-    ]
-    add_table(fin)
+    # section_header("Financial Summary")
+    # fin = [
+    #     ("Estimated Total Sav/Month", f"RM {get_num('Monthly Saving (RM)') :,.2f}"),
+    #     ("Estimated Total Sav/Year", f"RM {get_num('Yearly Saving (RM)') :,.2f}"),
+    #     ("Total Cost (Cash)", f"RM {get_num('cost_cash') :,.2f}"),
+    #     ("Installment (8% Interest) (Total)", f"RM {get_num('Installment 8% Interests') :,.2f}"),
+    #     ("Installment (4 Years) (Monthly)", f"RM {get_num('Installment 4 Years (RM)') :,.2f}"),
+    #     ("Estimated ROI (Cash) (yrs)", f"{get_num('roi_cash') :,.2f}"),
+    #     ("Estimated ROI (CC) (yrs)", f"{get_num('roi_cc') :,.2f}")
+    # ]
+    # add_table(fin)
 
     # --- Environmental Benefits ---
     section_header("Environmental Benefits")
