@@ -91,6 +91,12 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill):
     monthly_saving = daily_saving * 30.0
     yearly_saving = monthly_saving * 12.0
 
+    # --- Cap monthly saving at max 60% of bill (energy_portion_rm) ---
+    if monthly_saving > energy_portion_rm:
+        monthly_saving = energy_portion_rm
+        daily_saving = monthly_saving / 30.0
+        yearly_saving = monthly_saving * 12.0
+
     # --- Step 8: New monthly bill ---
     new_monthly_bill = max(0, monthly_bill - monthly_saving)
 
@@ -388,7 +394,7 @@ def main():
         # --- Step 3: Other constants ---
         ENERGY_OFFSET_RATIO = 0.6  # 60% of bill offsettable
         PANEL_WATT = 640
-        DAILY_USAGE_RATIO = 0.7
+        DAILY_USAGE_RATIO = 0.7  # fixed daytime usage
 
         # --- Step 4: Estimate monthly consumption ---
         est_kwh = bill / GENERAL_TARIFF  # total monthly usage in kWh
@@ -414,6 +420,16 @@ def main():
             value=recommended,
             help=f"Recommended to offset ~60% (RM {energy_portion_rm:.0f}) of your RM {bill:.0f} monthly bill."
         )
+
+        # --- Step 9: Estimated savings (fixed cap, no increase after cap reached) ---
+        solar_monthly_kwh = per_panel_daytime_kwh * pkg
+        estimated_saving_rm = solar_monthly_kwh * GENERAL_TARIFF
+
+        # Always cap savings at 60% energy portion — and stop increasing beyond this point
+        if estimated_saving_rm > energy_portion_rm:
+            estimated_saving_rm = energy_portion_rm
+        else:
+            estimated_saving_rm = min(estimated_saving_rm, energy_portion_rm)
 
         # --- Step 9: Info display ---
         st.markdown(
