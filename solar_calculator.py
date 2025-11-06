@@ -65,47 +65,63 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
         }
 
     # --- Step 2: Fixed parameters ---
-    ENERGY_OFFSET_RATIO = 0.6  # 60% of bill offset by solar
-    ENERGY_TARIFF = GENERAL_TARIFF
     PANEL_WATT = 640
+    ENERGY_OFFSET_RATIO = 0.6
+    ENERGY_TARIFF = GENERAL_TARIFF
 
     # --- Step 3: Estimate total consumption ---
     est_kwh = monthly_bill / GENERAL_TARIFF
 
-    # --- Step 4: Energy portion to offset (60%) ---
-    energy_portion_rm = monthly_bill * ENERGY_OFFSET_RATIO
-    total_target_kwh = energy_portion_rm / GENERAL_TARIFF
+    # --- Step 4: Over-generation target (120%) ---
+    oversize_factor = 1.2
+    target_kwh = est_kwh * oversize_factor
 
-    # ✅ Adjust target_kwh based on user's daytime usage ratio
-    target_kwh = total_target_kwh * daytime_option
-
-    # --- Step 5: Per-panel generation (fixed physical production) ---
+    # --- Step 5: Per-panel generation ---
     per_panel_monthly_total = (PANEL_WATT / 1000.0) * sunlight_hours * 30.0
-    per_panel_daytime_kwh = per_panel_monthly_total * 0.7  # 70% of total usable during daytime
+    per_panel_daytime_kwh = per_panel_monthly_total
 
-    # --- Step 6: Estimate recommended panels ---
-    raw_needed = math.ceil(target_kwh / per_panel_daytime_kwh)
-    recommended = min(max(raw_needed, 10), 100)
+    # --- Step 6: Recommended panels (reduced by 1) ---
+    raw_needed = math.ceil(target_kwh / per_panel_monthly_total)
+    recommended = max(raw_needed - 1, 10)  # ensure not below 10 panels minimum
+    recommended = min(recommended, 100)    # limit maximum 100
 
     # --- Step 7: System yield ---
     kwp = no_panels * PANEL_WATT / 1000.0
-    daily_yield = kwp * sunlight_hours
-    daytime_kwh = daily_yield * daytime_option  # proportional to selected daytime usage
+    total_solar_kwh = kwp * sunlight_hours * 30.0
+    direct_used_kwh = total_solar_kwh * daytime_option
+    exported_kwh = max(total_solar_kwh - direct_used_kwh, 0)
 
-    # --- Step 8: Savings (capped to energy portion) ---
-    daily_saving = daytime_kwh * GENERAL_TARIFF
-    monthly_saving = daily_saving * 30.0
-    yearly_saving = monthly_saving * 12.0
+    # --- Step 8: Export credit rate ---
+    def get_energy_charge_rate(monthly_bill):
+        est_kwh = monthly_bill / GENERAL_TARIFF
+        if est_kwh <= 1500:
+            return 0.2703
+        else:
+            return 0.3703
 
-    if monthly_saving > energy_portion_rm:
-        monthly_saving = energy_portion_rm
-        daily_saving = monthly_saving / 30.0
-        yearly_saving = monthly_saving * 12.0
+    export_rate = get_energy_charge_rate(monthly_bill)
+    export_credit_rm = exported_kwh * export_rate
 
-    # --- Step 9: New monthly bill ---
-    new_monthly_bill = max(0, monthly_bill - monthly_saving)
+    # --- Step 9: Night-time usage ---
+    night_kwh = est_kwh * (1 - daytime_option)
+    energy_charge_rm = night_kwh * export_rate
+    network_charge_rm = night_kwh * 0.1285
+    capacity_charge_rm = night_kwh * 0.0455
+    retail_charge_rm = 10.0
 
-    # --- Step 10: Cost tiers (updated version) ---
+    subtotal_rm = energy_charge_rm + network_charge_rm + capacity_charge_rm - export_credit_rm + retail_charge_rm
+    subtotal_rm = max(subtotal_rm, 0)
+
+    # --- Step 10: Add KWTBB (1.6%) + SST (8%) ---
+    with_kwtbb = subtotal_rm * 1.016
+    final_bill_rm = with_kwtbb * 1.08
+
+    # --- Step 11: Savings ---
+    estimated_saving = monthly_bill - final_bill_rm
+    if estimated_saving < 0:
+        estimated_saving = 0
+
+    # --- Step 12: Cost tiers ---
     if no_panels < 10:
         cost_cash = 17000
     elif 10 <= no_panels <= 17:
@@ -115,34 +131,36 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     else:
         cost_cash = 58000
 
-    # --- Step 11: Installments (8% interest) ---
+    # --- Step 13: Installments ---
     INTEREST_RATE = 0.08
     INSTALLMENT_YEARS = 4
     installment_total = cost_cash * (1 + INTEREST_RATE)
     installment_4yrs = installment_total / (INSTALLMENT_YEARS * 12)
 
-    # --- Step 12: ROI ---
+    # --- Step 14: ROI ---
+    yearly_saving = estimated_saving * 12
     roi_cash = cost_cash / yearly_saving if yearly_saving else float("inf")
     roi_cc = installment_total / yearly_saving if yearly_saving else float("inf")
     save_per_pv = yearly_saving / no_panels if no_panels else 0.0
 
-    # --- Step 13: Environmental impact ---
+    # --- Step 15: Environmental impact ---
     total_fossil = 350 * kwp
     total_trees = 2 * kwp
     total_co2 = 0.85 * kwp
 
-    return {
+    # --- Step 16: Return (unchanged) ---
+    energy_portion_rm = monthly_bill * ENERGY_OFFSET_RATIO
+
+    return {  # unchanged return block
         "No Panels": no_panels,
         "Recommended Panels": recommended,
         "Daytime Usage Ratio": f"{int(daytime_option * 100)}%",
         "kWp": f"{kwp:.2f}".rstrip('0').rstrip('.'),
-        "Daily Yield (kWh)": f"{daily_yield:.2f}".rstrip('0').rstrip('.'),
-        "Daytime Saving (kWh)": f"{daytime_kwh:.2f}".rstrip('0').rstrip('.'),
-        "Daytime Saving (RM)": f"{math.floor(daily_saving + 0.5):,}",
-
-        # RM values
-        "Daily Saving (RM)": f"{math.floor(daily_saving + 0.5):,}",
-        "Monthly Saving (RM)": f"{math.floor(monthly_saving + 0.5):,}",
+        "Daily Yield (kWh)": f"{(total_solar_kwh/30):.2f}".rstrip('0').rstrip('.'),
+        "Daytime Saving (kWh)": f"{direct_used_kwh/30:.2f}".rstrip('0').rstrip('.'),
+        "Daytime Saving (RM)": f"{math.floor(estimated_saving/30 + 0.5):,}",
+        "Daily Saving (RM)": f"{math.floor(estimated_saving/30 + 0.5):,}",
+        "Monthly Saving (RM)": f"{math.floor(estimated_saving + 0.5):,}",
         "Yearly Saving (RM)": f"{math.floor(yearly_saving + 0.5):,}",
         "Total Cost (RM)": f"{math.floor(cost_cash + 0.5):,}",
         "Installment 8% Interests": f"{math.floor(installment_total + 0.5):,}",
@@ -150,7 +168,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
         "monthly_gen_kwh": f"{math.floor(no_panels * per_panel_monthly_total + 0.5):,}",
         "monthly_kwh": f"{est_kwh:.2f}",
         "monthly_gen_daytime_kwh": f"{math.floor(no_panels * per_panel_daytime_kwh + 0.5):,}",
-        "new_monthly": f"{math.floor(new_monthly_bill + 0.5):,}",
+        "new_monthly": f"{math.floor(final_bill_rm + 0.5):,}",
         "roi_cash": f"{roi_cash:.2f}".rstrip('0').rstrip('.'),
         "roi_cc": f"{roi_cc:.2f}".rstrip('0').rstrip('.'),
         "save_per_pv": f"{math.floor(save_per_pv + 0.5):,}",
@@ -162,11 +180,9 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
         "total_fossil": f"{math.floor(total_fossil + 0.5):,}",
         "total_trees": f"{math.floor(total_trees + 0.5):,}",
         "total_co2": f"{math.floor(total_co2 + 0.5):,}",
-
-        # Debug info
         "general_tariff": f"{GENERAL_TARIFF:.4f}",
         "energy_tariff": f"{ENERGY_TARIFF:.4f}",
-        "energy_portion_rm": f"{math.floor(energy_portion_rm + 0.5):,}",
+        "energy_portion_rm": f"{math.floor(monthly_bill * ENERGY_OFFSET_RATIO + 0.5):,}",
         "target_kwh": f"{math.floor(target_kwh + 0.5):,}",
         "per_panel_monthly_total": f"{per_panel_monthly_total:.2f}".rstrip('0').rstrip('.'),
         "per_panel_daytime_kwh": f"{per_panel_daytime_kwh:.2f}".rstrip('0').rstrip('.'),
@@ -392,69 +408,132 @@ def main():
             st.warning("⚠️ Please enter a bill below RM 666.45 or above RM 816.45.")
             st.stop()
 
-        # --- Step 3: Other constants ---
-        ENERGY_OFFSET_RATIO = 0.6  # Only offset energy portion
+        # --- Step 3: Constants ---
         PANEL_WATT = 640
 
         # --- Step 4: Estimate monthly consumption ---
-        est_kwh = bill / GENERAL_TARIFF  # total kWh/month
+        est_kwh = bill / GENERAL_TARIFF  # total kWh/month (approx)
 
-        # --- Step 5: Energy portion to offset (60%) ---
-        energy_portion_rm = bill * ENERGY_OFFSET_RATIO
-        target_kwh = energy_portion_rm / GENERAL_TARIFF
-
-        # --- NEW Step 6: User chooses daytime usage ratio ---
+        # --- Step 5: Daytime usage selection ---
         daytime_option = st.radio(
             "Select estimated daytime usage portion:",
             options=[0.3, 0.5, 0.7],
-            index=2,  # default 0.7
+            index=2,  # default 70%
             format_func=lambda x: f"{int(x*100)}% daytime usage",
             horizontal=True,
-            help="Choose your estimated percentage of daytime electricity usage."
+            help="Estimate how much of your solar energy is used directly during the day."
         )
 
-        # --- Step 7: Per-panel generation (daytime only) ---
+        # --- Step 6: Solar generation per panel (kWh/month) ---
         per_panel_monthly_total = (PANEL_WATT / 1000) * sunlight_hours * 30
-        per_panel_daytime_kwh = per_panel_monthly_total * daytime_option
 
-        # --- Step 8: Determine number of panels needed ---
-        raw_needed = math.ceil(target_kwh / per_panel_daytime_kwh)
-        recommended = min(max(raw_needed, 10), 100)
+        # --- Step 7: Recommended number of panels ---
+        raw_needed = math.ceil(est_kwh / per_panel_monthly_total)
+        recommended = min(max(raw_needed - 1, 10), 100)  # ensure slightly under but not below 10
 
-        # --- Step 9: Panel slider ---
+        # --- Step 8: Panel count slider ---
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
-            max_value=100,
+            max_value=50,
             step=1,
-            value=recommended,
-            help=f"Recommended to offset ~60% (RM {energy_portion_rm:.0f}) of your RM {bill:.0f} monthly bill."
+            value=st.session_state.pkg if "pkg" in st.session_state else recommended,
+            help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
         )
+        st.session_state.pkg = pkg  # persist selection
 
-        # --- Step 10: Estimated savings (capped) ---
-        solar_monthly_kwh = per_panel_daytime_kwh * pkg
-        estimated_saving_rm = solar_monthly_kwh * GENERAL_TARIFF
+        # --- Step 9: Solar generation and savings ---
+        total_solar_kwh = per_panel_monthly_total * pkg
 
-        # Cap savings at energy portion
-        if estimated_saving_rm > energy_portion_rm:
-            estimated_saving_rm = energy_portion_rm
+        # Split generation into direct usage vs export
+        direct_used_kwh = total_solar_kwh * daytime_option
+        exported_kwh = total_solar_kwh - direct_used_kwh
 
-        # --- Display results ---
+        # --- Export (SMP) fixed rate ---
+        export_rate = 0.25  # RM/kWh
+
+        # Calculate savings
+        direct_saving_rm = direct_used_kwh * GENERAL_TARIFF
+        export_credit_rm = exported_kwh * export_rate
+        total_saving_rm = direct_saving_rm + export_credit_rm
+
+        # --- Step 10: Calculate detailed new bill ---
+        night_kwh = est_kwh * (1 - daytime_option)
+
+        # Individual charges for night usage
+        def get_energy_charge_rate(monthly_bill):
+            est_kwh = monthly_bill / GENERAL_TARIFF
+            if est_kwh <= 1500:
+                return 0.2703
+            else:
+                return 0.3703
+
+        energy_charge_rm = night_kwh * get_energy_charge_rate(bill)
+        network_charge_rm = night_kwh * 0.1285
+        capacity_charge_rm = night_kwh * 0.0455
+        retail_charge_rm = 10.0
+
+        # Subtotal before taxes
+        subtotal_rm = energy_charge_rm + network_charge_rm + capacity_charge_rm - export_credit_rm + retail_charge_rm
+        subtotal_rm = max(subtotal_rm, 0)  # prevent negative subtotal
+
+        # Taxes
+        kwtbb_rm = subtotal_rm * 0.016  # 1.6%
+        after_kwtbb_rm = subtotal_rm + kwtbb_rm
+
+        sst_rm = after_kwtbb_rm * 0.08  # 8%
+        final_new_bill_rm = after_kwtbb_rm + sst_rm
+
+        # Final estimated saving
+        estimated_saving_rm = max(bill - final_new_bill_rm, 0)
+
+        st.divider()
+
+        # --- Step 11: Display results ---
         st.markdown(
             f"""
-            💡 Based on your RM {bill:.0f} monthly bill and {sunlight_hours}h/day sunlight:<br>
-            • Applied tariff: <b>RM {GENERAL_TARIFF:.4f}/kWh</b><br>
-            • Energy Charge (≈60%): <b>RM {energy_portion_rm:.0f}</b> ≈ <b>{target_kwh:.0f} kWh</b><br>
-            • Daytime usage: <b>{int(daytime_option*100)}%</b><br>
-            • Recommended solar panels: <b>{recommended}</b> pcs<br>
+            ## ☀️ Solar Generation & Usage
+            - **Monthly consumption:** {est_kwh:.0f} kWh
+            - **Total solar generation:** {total_solar_kwh:.0f} kWh/month  
+            - **Directly used:** {direct_used_kwh:.0f} kWh × RM {GENERAL_TARIFF:.4f} = RM {direct_saving_rm:.2f}  
+            - **Exported:** {exported_kwh:.0f} kWh × RM {export_rate:.4f} = RM {export_credit_rm:.2f}  
+
+            ## 🧾 New Monthly Bill Breakdown (with Formulas)
+            ### 🌙 Nighttime Usage Charges  
+            **Nighttime kWh:** {night_kwh:.0f}  
+
+            | Charge Type | Formula | Amount (RM) |
+            |--------------|----------|-------------|
+            | Energy Charge | {night_kwh:.0f} × {get_energy_charge_rate(bill):.4f} | {energy_charge_rm:.2f} |
+            | Network Charge | {night_kwh:.0f} × 0.1285 | {network_charge_rm:.2f} |
+            | Capacity Charge | {night_kwh:.0f} × 0.0455 | {capacity_charge_rm:.2f} |
+            | Retail Charge | Flat RM 10 | {retail_charge_rm:.2f} |
+            | Export Credit | - {exported_kwh:.0f} × {export_rate:.4f} | -{export_credit_rm:.2f} |
+
+            **Subtotal (before tax)** = (Energy + Network + Capacity + Retail - Export)  
+            → RM {subtotal_rm:.2f}  
+
+            ### ⚡ Taxes & Fees
+            - **KWTBB (1.6%)** = {subtotal_rm:.2f} × 1.6% = RM {kwtbb_rm:.2f}  
+            - **After KWTBB:** RM {after_kwtbb_rm:.2f}  
+            - **SST (8%)** = {after_kwtbb_rm:.2f} × 8% = RM {sst_rm:.2f}  
+            - **Final New Monthly Bill:** RM {final_new_bill_rm:.2f}  
             """,
             unsafe_allow_html=True
         )
 
-        st.markdown(
+        # --- Step 12: Summary ---
+        st.success(
             f"""
-            _Note: All savings and impacts are estimated based on {int(daytime_option*100)}% daytime usage._
-            """,
+            💰 **Estimated Monthly Saving:** RM {estimated_saving_rm:,.2f}  
+            🧾 **New Bill (after solar):** RM {final_new_bill_rm:,.2f}  
+            ☀️ **Solar Generation:** {total_solar_kwh:.0f} kWh/month  
+            Recommended Panels: **{recommended}**
+            """
+        )
+
+        st.markdown(
+            f"_Note: Savings depend on your actual daytime consumption and export credit rate._",
             unsafe_allow_html=True
         )
 
