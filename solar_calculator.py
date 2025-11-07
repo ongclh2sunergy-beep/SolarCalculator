@@ -1,9 +1,5 @@
 import math
-import re
 import streamlit as st
-from fpdf import FPDF
-from PIL import Image
-import io
 
 # --- page-wide light yellow background ---
 st.markdown(
@@ -201,16 +197,20 @@ def get_energy_charge_rate(monthly_bill):
         return 0.3703  # Energy charge above 1500 kWh
 
 def build_pdf(bill, raw_needed, pkg, c):
-    import io, re, urllib.request, os
+    import io, os, re, urllib.request
     from fpdf import FPDF
 
-    # --- Download logo temporarily ---
-    logo_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvUrQzbNoJwW7pypHZ9yweCafrQtCWeKRjUg&s"
-    logo_path = "company_logo.png"
-    try:
-        urllib.request.urlretrieve(logo_url, logo_path)
-    except Exception:
-        logo_path = None
+    # --- Reliable DejaVu font setup (auto-download if missing) ---
+    font_path = "DejaVuSans.ttf"
+    if not os.path.exists(font_path):
+        try:
+            urllib.request.urlretrieve(
+                "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/version_2_37/ttf/DejaVuSans.ttf",
+                font_path
+            )
+        except Exception as e:
+            print("⚠️ Could not download DejaVuSans.ttf:", e)
+            font_path = None
 
     # --- Helper: clean number strings ---
     def clean_number(x):
@@ -234,89 +234,117 @@ def build_pdf(bill, raw_needed, pkg, c):
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
+    # Add Unicode font if available
+    if font_path and os.path.exists(font_path):
+        pdf.add_font("DejaVu", "", font_path, uni=True)
+        pdf.set_font("DejaVu", "", 12)
+    else:
+        pdf.set_font("Helvetica", "", 12)
+
     # === Solar Theme Colors ===
-    COLOR_PRIMARY = (255, 193, 7)     # solar yellow
+    COLOR_PRIMARY = (255, 193, 7)     # yellow
     COLOR_SECONDARY = (255, 243, 205) # light background
     COLOR_TEXT = (60, 60, 60)
 
-    # --- Header with Logo and Title ---
-    header_height = 20
+    # --- Header ---
+    logo_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvUrQzbNoJwW7pypHZ9yweCafrQtCWeKRjUg&s"
+    logo_path = "company_logo.png"
+    try:
+        urllib.request.urlretrieve(logo_url, logo_path)
+    except Exception:
+        logo_path = None
+
     if logo_path and os.path.exists(logo_path):
-        pdf.image(logo_path, 10, 4, 25)  # moved logo slightly higher
+        pdf.image(logo_path, 10, 4, 25)
     pdf.set_xy(40, 12)
-    pdf.set_font("Helvetica", "B", 18)
+    pdf.set_font("DejaVu" if font_path else "Helvetica", "B", 18)
     pdf.set_text_color(255, 165, 0)
     pdf.cell(0, 10, "Solar Savings Summary", ln=1, align="L")
     pdf.set_text_color(*COLOR_TEXT)
     pdf.ln(10)
 
-    # --- Section Helper ---
+    # --- Section Helpers ---
     def section_header(title):
-        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_font("DejaVu" if font_path else "Helvetica", "B", 14)
         pdf.set_fill_color(*COLOR_PRIMARY)
         pdf.cell(0, 8, title, ln=1, align="L", fill=True)
-        pdf.set_font("Helvetica", size=12)
+        pdf.set_font("DejaVu" if font_path else "Helvetica", "", 12)
 
     def add_table(rows, col1_width=95, col2_width=95):
         for label, val in rows:
             pdf.set_fill_color(*COLOR_SECONDARY)
             pdf.cell(col1_width, 8, label, border=1, fill=True)
-            pdf.cell(col2_width, 8, val, border=1, ln=1, fill=True)
+            pdf.cell(col2_width, 8, str(val), border=1, ln=1, fill=True)
         pdf.ln(4)
 
     # --- Input Summary ---
     section_header("Input Summary")
     inputs = [
-        ("Monthly Bill (MYR)", f"{float(bill):,.2f}" if bill else "0.00"),
-        ("Panels Needed", str(raw_needed)),
-        ("Package Qty", str(pkg))
+        ("Monthly Bill (RM)", f"{float(bill):,.2f}" if bill else "0.00"),
+        ("Panel Needed", str(pkg)),
+        ("Tariff Rate (RM/kWh)", get_str("general_tariff")),
+        ("Estimated Monthly Consumption (kWh)", get_str("monthly_kwh")),
     ]
     add_table(inputs)
+
+    # --- Solar System Summary ---
+    section_header("Solar System Details")
+    system = [
+        ("Installed kWp", get_str("kwp_installed")),
+        ("kWac Output", get_str("kwac")),
+        ("Per Panel Yield (kWh/mo)", get_str("per_panel_monthly_total")),
+    ]
+    add_table(system)
 
     # --- Key Metrics ---
     section_header("Key Metrics")
     metrics = [
-        ("Consumption (kWh/mo)", f"{get_num('monthly_kwh') :,.2f}"),
-        ("Daytime Saving (kWh)", f"{get_num('Daytime Saving (kWh)') :,.2f}"),
-        ("Estimated Daily Saving (RM)", f"{get_num('Daily Saving (RM)') :,.2f}"),
-        ("Estimated Monthly Savings (RM)", f"{get_num('Monthly Saving (RM)') :,.2f}"),
-        ("New Bill After Solar (RM)", f"{get_num('new_monthly') :,.2f}")
+        ("Monthly Generation (kWh)", get_str("monthly_gen_kwh")),
+        ("Daytime Saving (kWh/day)", get_str("Daytime Saving (kWh)")),
+        ("Daily Saving (RM)", get_str("Daily Saving (RM)")),
+        ("Monthly Saving (RM)", get_str("Monthly Saving (RM)")),
+        ("Yearly Saving (RM)", get_str("Yearly Saving (RM)")),
+        ("New Monthly Bill (RM)", get_str("new_monthly")),
     ]
     add_table(metrics)
 
     # --- Financial Summary ---
     section_header("Financial Summary")
     fin = [
-        ("Estimated Total Sav/Month", f"RM {get_num('Monthly Saving (RM)') :,.2f}"),
-        ("Estimated Total Sav/Year", f"RM {get_num('Yearly Saving (RM)') :,.2f}"),
-        ("Total Cost (Cash)", f"RM {get_num('cost_cash') :,.2f}"),
-        ("Installment (8% Interest) (Total)", f"RM {get_num('Installment 8% Interests') :,.2f}"),
-        ("Installment (4 Years) (Monthly)", f"RM {get_num('Installment 4 Years (RM)') :,.2f}"),
-        ("Estimated ROI (Cash) (yrs)", f"{get_num('roi_cash') :,.2f}"),
-        ("Estimated ROI (CC) (yrs)", f"{get_num('roi_cc') :,.2f}")
+        ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
+        ("Installment (8% Interest)", f"RM {get_str('Installment 8% Interests')}"),
+        ("Installment (4 Years / Month)", f"RM {get_str('Installment 4 Years (RM)')}"),
+        ("ROI (Cash)", f"{get_str('roi_cash')} years"),
+        ("ROI (Credit)", f"{get_str('roi_cc')} years"),
+        ("O&M Fee (Monthly)", f"RM {get_str('om_fee_monthly')}"),
     ]
     add_table(fin)
 
-    # --- Environmental Benefits ---
-    section_header("Environmental Benefits")
+    # --- Environmental Impact ---
+    section_header("Environmental Impact")
     env = [
-        ("Fossil Fuel Saved (kg)", f"{get_num('total_fossil') :,.2f}"),
-        ("Trees Saved", f"{get_num('total_trees') :,.2f}"),
-        ("CO2 Avoided (t)", f"{get_num('total_co2') :,.2f}")
+        ("Fossil Fuel Saved (kg)", get_str("total_fossil")),
+        ("Trees Saved", get_str("total_trees")),
+        ("CO2 Avoided (t)", get_str("total_co2")),
     ]
     add_table(env)
 
     # --- Footer ---
-    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_font("DejaVu" if font_path else "Helvetica", "I", 9)
     pdf.set_text_color(120, 120, 120)
     pdf.multi_cell(
         0,
         5,
-        "Note: Figures are estimates. Actual results depend on site conditions, weather, and system performance.\n",
+        "Note: Figures are estimates and may vary based on site conditions, weather, and system performance.\n",
         align="L"
     )
 
-    return io.BytesIO(pdf.output(dest="S").encode("latin-1"))
+    # --- Output PDF as bytes (compatible with fpdf2) ---
+    pdf_bytes = pdf.output(dest="S")
+    if isinstance(pdf_bytes, str):  # old FPDF returns str
+        pdf_bytes = pdf_bytes.encode("latin-1", "ignore")
+
+    return io.BytesIO(pdf_bytes)
 
 def main():
     st.title("☀️ Solar Savings Calculator")
@@ -379,18 +407,20 @@ def main():
         )
 
 
-        # ---- Handle buttons ----
+       # ---- Handle buttons ----
         if submitted:
             if bill_val and bill_val > 0:
                 st.session_state.calculated = True
                 st.session_state.bill = bill_val
-                st.session_state.reset_daytime = True
+                
+                # Keep previously selected daytime and pkg if exist
+                if "daytime_option" not in st.session_state:
+                    st.session_state.daytime_option = 0.7
+                if "pkg" not in st.session_state:
+                    st.session_state.pkg = None
             else:
                 st.warning("Please enter a positive number.")
 
-            # 🔑 Clear the input after Calculate
-            if "bill_input" in st.session_state:
-                del st.session_state["bill_input"]
             st.rerun()
 
 
@@ -418,18 +448,24 @@ def main():
         daytime_option = st.radio(
             "Select estimated daytime usage portion:",
             options=[0.3, 0.5, 0.7],
-            index=2,  # default 70%
+            index=[0.3, 0.5, 0.7].index(st.session_state.get("daytime_option", 0.7) if st.session_state.get("daytime_option", 0.7) in [0.3, 0.5, 0.7] else 0.7),
             format_func=lambda x: f"{int(x*100)}% daytime usage",
             horizontal=True,
             help="Estimate how much of your solar energy is used directly during the day."
         )
+        st.session_state.daytime_option = daytime_option
 
         # --- Step 6: Solar generation per panel (kWh/month) ---
         per_panel_monthly_total = (PANEL_WATT / 1000) * sunlight_hours * 30
 
         # --- Step 7: Recommended number of panels ---
         raw_needed = math.ceil(est_kwh / per_panel_monthly_total)
-        recommended = min(max(raw_needed - 1, 10), 100)  # ensure slightly under but not below 10
+        recommended = min(max(raw_needed - 2, 10), 100)  # ensure slightly under but not below 10
+
+        # Reset slider default if area (sunlight_hours) changed
+        if "last_sunlight" not in st.session_state or st.session_state.last_sunlight != sunlight_hours:
+            st.session_state.pkg = recommended
+            st.session_state.last_sunlight = sunlight_hours
 
         # --- Step 8: Panel count slider ---
         pkg = st.slider(
@@ -437,7 +473,7 @@ def main():
             min_value=10,
             max_value=50,
             step=1,
-            value=st.session_state.pkg if "pkg" in st.session_state else recommended,
+            value=st.session_state.get("pkg", recommended),
             help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
         )
         st.session_state.pkg = pkg  # persist selection
