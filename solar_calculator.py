@@ -78,7 +78,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
 
     # --- Step 6: Recommended panels (reduced by 1) ---
     raw_needed = math.ceil(target_kwh / per_panel_monthly_total)
-    recommended = max(raw_needed - 1, 10)  # ensure not below 10 panels minimum
+    recommended = max(raw_needed, 10)  # ensure not below 10 panels minimum
     recommended = min(recommended, 100)    # limit maximum 100
 
     # --- Step 7: System yield ---
@@ -308,7 +308,7 @@ def build_pdf(bill, raw_needed, pkg, c):
     ]
     add_table(metrics)
 
-    # --- Financial Summary ---
+    # # --- Financial Summary ---
     section_header("Financial Summary")
     fin = [
         ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
@@ -410,18 +410,27 @@ def main():
        # ---- Handle buttons ----
         if submitted:
             if bill_val and bill_val > 0:
-                st.session_state.calculated = True
+                # 🔄 Reset old calculation states before new one
+                for key in [
+                    "calculated", "bill", "solar_result", "daytime_option",
+                    "recommended_panels", "pkg", "c", "raw_needed"
+                ]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+
+                # 💡 Now store new input
                 st.session_state.bill = bill_val
-                
-                # Keep previously selected daytime and pkg if exist
-                if "daytime_option" not in st.session_state:
-                    st.session_state.daytime_option = 0.7
-                if "pkg" not in st.session_state:
-                    st.session_state.pkg = None
+                st.session_state.calculated = True
+                st.session_state.reset_daytime = True
+
+                # 🔑 Clear bill input field
+                if "bill_input" in st.session_state:
+                    del st.session_state["bill_input"]
+
+                # 🔁 Force refresh with new result
+                st.rerun()
             else:
                 st.warning("Please enter a positive number.")
-
-            st.rerun()
 
 
     if st.session_state.calculated:
@@ -460,7 +469,7 @@ def main():
 
         # --- Step 7: Recommended number of panels ---
         raw_needed = math.ceil(est_kwh / per_panel_monthly_total)
-        recommended = min(max(raw_needed - 2, 10), 100)  # ensure slightly under but not below 10
+        recommended = min(max(raw_needed, 10), 100)  # ensure slightly under but not below 10
 
         # Reset slider default if area (sunlight_hours) changed
         if "last_sunlight" not in st.session_state or st.session_state.last_sunlight != sunlight_hours:
