@@ -208,7 +208,7 @@ def get_energy_charge_rate(monthly_bill):
 def build_pdf(bill, raw_needed, pkg, c):
     import io, re, os, urllib.request, tempfile
     from fpdf import FPDF
-    from fpdf.enums import XPos, YPos
+    # from fpdf.enums import XPos, YPos
 
     # --- Helper: clean number strings ---
     def clean_number(x):
@@ -258,7 +258,7 @@ def build_pdf(bill, raw_needed, pkg, c):
     pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(255, 165, 0)
     pdf.cell(0, 10, "Solar Savings Summary",
-             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="L")
+             ln=True, align="L")
     pdf.set_text_color(*COLOR_TEXT)
     pdf.ln(10)
 
@@ -266,8 +266,7 @@ def build_pdf(bill, raw_needed, pkg, c):
     def section_header(title):
         pdf.set_font("Helvetica", "B", 14)
         pdf.set_fill_color(*COLOR_PRIMARY)
-        pdf.cell(0, 8, title, new_x=XPos.LMARGIN,
-                 new_y=YPos.NEXT, align="L", fill=True)
+        pdf.cell(0, 8, title, ln=True, align="L", fill=True)
         pdf.set_font("Helvetica", "", 12)
         pdf.ln(2)
 
@@ -276,7 +275,7 @@ def build_pdf(bill, raw_needed, pkg, c):
             pdf.set_fill_color(*COLOR_SECONDARY)
             pdf.cell(col1_width, 8, label, border=1, fill=True)
             pdf.cell(col2_width, 8, str(val), border=1,
-                     new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
+                     ln=True, fill=True)
         pdf.ln(4)
 
     # --- Input Summary ---
