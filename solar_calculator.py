@@ -60,7 +60,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
             "monthly_bill_warning": "Please enter a bill below RM 666.45 or above RM 816.45"
         }
 
-    # --- Step 2: Fixed parameters ---
+    # --- Step 2: Fixed constants ---
     PANEL_WATT = 640
     ENERGY_OFFSET_RATIO = 0.6
     ENERGY_TARIFF = GENERAL_TARIFF
@@ -73,51 +73,56 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     target_kwh = est_kwh * oversize_factor
 
     # --- Step 5: Per-panel generation ---
-    per_panel_monthly_total = (PANEL_WATT / 1000.0) * sunlight_hours * 30.0
+    per_panel_monthly_total = (PANEL_WATT / 1000) * sunlight_hours * 30
     per_panel_daytime_kwh = per_panel_monthly_total
 
-    # --- Step 6: Recommended panels (reduced by 1) ---
+    # --- Step 6: Recommended panels ---
     raw_needed = math.ceil(target_kwh / per_panel_monthly_total)
-    recommended = max(raw_needed, 10)  # ensure not below 10 panels minimum
-    recommended = min(recommended, 100)    # limit maximum 100
+    recommended = max(min(raw_needed, 100), 10)
 
     # --- Step 7: System yield ---
-    kwp = no_panels * PANEL_WATT / 1000.0
-    total_solar_kwh = kwp * sunlight_hours * 30.0
-    direct_used_kwh = total_solar_kwh * daytime_option
-    exported_kwh = max(total_solar_kwh - direct_used_kwh, 0)
+    kwp = no_panels * PANEL_WATT / 1000
+    total_solar_kwh = per_panel_monthly_total * no_panels
 
-    # --- Step 8: Export credit rate ---
-    def get_energy_charge_rate(monthly_bill):
-        est_kwh = monthly_bill / GENERAL_TARIFF
-        if est_kwh <= 1500:
-            return 0.2703
-        else:
-            return 0.3703
+    # Split generation into direct usage vs export
+    direct_used_kwh = est_kwh * daytime_option
+    exported_kwh = total_solar_kwh - direct_used_kwh
 
-    export_rate = get_energy_charge_rate(monthly_bill)
+    # --- Step 8: Export rate ---
+    export_rate = 0.25  # fixed SMP rate
     export_credit_rm = exported_kwh * export_rate
 
-    # --- Step 9: Night-time usage ---
+    # --- Step 9: Night usage and new bill calculation ---
     night_kwh = est_kwh * (1 - daytime_option)
-    energy_charge_rm = night_kwh * export_rate
+
+    # Sub charges
+    energy_charge_rm = night_kwh * (0.2703 if est_kwh <= 1500 else 0.3703)
     network_charge_rm = night_kwh * 0.1285
     capacity_charge_rm = night_kwh * 0.0455
     retail_charge_rm = 10.0
 
-    subtotal_rm = energy_charge_rm + network_charge_rm + capacity_charge_rm - export_credit_rm + retail_charge_rm
+    # Apply export credit ONLY to the energy charge
+    energy_charge_after_offset = max(energy_charge_rm - export_credit_rm, 0)
+
+    # Now calculate subtotal (export does NOT reduce other charges)
+    subtotal_rm = (
+        energy_charge_after_offset +
+        network_charge_rm +
+        capacity_charge_rm +
+        retail_charge_rm
+    )
     subtotal_rm = max(subtotal_rm, 0)
 
-    # --- Step 10: Add KWTBB (1.6%) + SST (8%) ---
-    with_kwtbb = subtotal_rm * 1.016
-    final_bill_rm = with_kwtbb * 1.08
+    # Taxes
+    kwtbb_rm = subtotal_rm * 0.016
+    after_kwtbb_rm = subtotal_rm + kwtbb_rm
+    sst_rm = after_kwtbb_rm * 0.08
+    final_new_bill_rm = after_kwtbb_rm + sst_rm
 
-    # --- Step 11: Savings ---
-    estimated_saving = monthly_bill - final_bill_rm
-    if estimated_saving < 0:
-        estimated_saving = 0
+    # --- Step 10: Estimated Saving ---
+    estimated_saving = max(monthly_bill - final_new_bill_rm, 0)
 
-    # --- Step 12: Cost tiers ---
+    # --- Step 11: Cost tiers ---
     if no_panels < 10:
         cost_cash = 17000
     elif 10 <= no_panels <= 17:
@@ -127,35 +132,38 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     else:
         cost_cash = 58000
 
-    # --- Step 13: Installments ---
+    # --- Step 12: Installments ---
     INTEREST_RATE = 0.08
     INSTALLMENT_YEARS = 4
     installment_total = cost_cash * (1 + INTEREST_RATE)
     installment_4yrs = installment_total / (INSTALLMENT_YEARS * 12)
 
-    # --- Step 14: ROI ---
+    # --- Step 13: ROI ---
     yearly_saving = estimated_saving * 12
     roi_cash = cost_cash / yearly_saving if yearly_saving else float("inf")
     roi_cc = installment_total / yearly_saving if yearly_saving else float("inf")
     save_per_pv = yearly_saving / no_panels if no_panels else 0.0
 
-    # --- Step 15: Environmental impact ---
+    # --- Step 14: Environmental Impact ---
     total_fossil = 350 * kwp
     total_trees = 2 * kwp
     total_co2 = 0.85 * kwp
 
-    # --- Step 16: Return (unchanged) ---
-    energy_portion_rm = monthly_bill * ENERGY_OFFSET_RATIO
+    # --- Step 15: Battery Calculation ---
+    solar_capacity_kw = kwp
+    est_battery_capacity = solar_capacity_kw * 2  # solar * 2
+    battery_kwh = max(10, math.floor(est_battery_capacity / 5) * 5)  # round to nearest 5
+    battery_price = (battery_kwh / 5) * 3300  # RM 3300 per 5kWh
 
-    return {  # unchanged return block
+    # --- Step 16: Return Dictionary (unchanged) ---
+    return {
         "No Panels": no_panels,
         "Recommended Panels": recommended,
-        "Daytime Usage Ratio": f"{int(daytime_option * 100)}%",
         "kWp": f"{kwp:.2f}".rstrip('0').rstrip('.'),
-        "Daily Yield (kWh)": f"{(total_solar_kwh/30):.2f}".rstrip('0').rstrip('.'),
-        "Daytime Saving (kWh)": f"{direct_used_kwh/30:.2f}".rstrip('0').rstrip('.'),
-        "Daytime Saving (RM)": f"{math.floor(estimated_saving/30 + 0.5):,}",
-        "Daily Saving (RM)": f"{math.floor(estimated_saving/30 + 0.5):,}",
+        "Daily Yield (kWh)": f"{(total_solar_kwh / 30):.2f}".rstrip('0').rstrip('.'),
+        "Daytime Saving (kWh)": f"{direct_used_kwh / 30:.2f}".rstrip('0').rstrip('.'),
+        "Daytime Saving (RM)": f"{math.floor(estimated_saving / 30 + 0.5):,}",
+        "Daily Saving (RM)": f"{math.floor(estimated_saving / 30 + 0.5):,}",
         "Monthly Saving (RM)": f"{math.floor(estimated_saving + 0.5):,}",
         "Yearly Saving (RM)": f"{math.floor(yearly_saving + 0.5):,}",
         "Total Cost (RM)": f"{math.floor(cost_cash + 0.5):,}",
@@ -163,8 +171,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
         "Installment 4 Years (RM)": f"{installment_4yrs:,.2f}",
         "monthly_gen_kwh": f"{math.floor(no_panels * per_panel_monthly_total + 0.5):,}",
         "monthly_kwh": f"{est_kwh:.2f}",
-        "monthly_gen_daytime_kwh": f"{math.floor(no_panels * per_panel_daytime_kwh + 0.5):,}",
-        "new_monthly": f"{math.floor(final_bill_rm + 0.5):,}",
+        "new_monthly": f"{math.floor(final_new_bill_rm + 0.5):,}",
         "roi_cash": f"{roi_cash:.2f}".rstrip('0').rstrip('.'),
         "roi_cc": f"{roi_cc:.2f}".rstrip('0').rstrip('.'),
         "save_per_pv": f"{math.floor(save_per_pv + 0.5):,}",
@@ -182,6 +189,8 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
         "target_kwh": f"{math.floor(target_kwh + 0.5):,}",
         "per_panel_monthly_total": f"{per_panel_monthly_total:.2f}".rstrip('0').rstrip('.'),
         "per_panel_daytime_kwh": f"{per_panel_daytime_kwh:.2f}".rstrip('0').rstrip('.'),
+        "Battery Capacity (kWh)": f"{battery_kwh:.0f}",
+        "Battery Price (RM)": f"{math.floor(battery_price + 0.5):,}",
     }
 
 def get_energy_charge_rate(monthly_bill):
@@ -197,20 +206,9 @@ def get_energy_charge_rate(monthly_bill):
         return 0.3703  # Energy charge above 1500 kWh
 
 def build_pdf(bill, raw_needed, pkg, c):
-    import io, os, re, urllib.request
+    import io, re, os, urllib.request, tempfile
     from fpdf import FPDF
-
-    # --- Reliable DejaVu font setup (auto-download if missing) ---
-    font_path = "DejaVuSans.ttf"
-    if not os.path.exists(font_path):
-        try:
-            urllib.request.urlretrieve(
-                "https://raw.githubusercontent.com/dejavu-fonts/dejavu-fonts/version_2_37/ttf/DejaVuSans.ttf",
-                font_path
-            )
-        except Exception as e:
-            print("⚠️ Could not download DejaVuSans.ttf:", e)
-            font_path = None
+    from fpdf.enums import XPos, YPos
 
     # --- Helper: clean number strings ---
     def clean_number(x):
@@ -233,48 +231,52 @@ def build_pdf(bill, raw_needed, pkg, c):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-
-    # Add Unicode font if available
-    if font_path and os.path.exists(font_path):
-        pdf.add_font("DejaVu", "", font_path, uni=True)
-        pdf.set_font("DejaVu", "", 12)
-    else:
-        pdf.set_font("Helvetica", "", 12)
+    pdf.set_font("Helvetica", "", 12)
 
     # === Solar Theme Colors ===
     COLOR_PRIMARY = (255, 193, 7)     # yellow
     COLOR_SECONDARY = (255, 243, 205) # light background
     COLOR_TEXT = (60, 60, 60)
 
-    # --- Header ---
+    # --- Header (with logo) ---
+    # Use a safe, downloadable image
     logo_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvUrQzbNoJwW7pypHZ9yweCafrQtCWeKRjUg&s"
-    logo_path = "company_logo.png"
+    tmp_dir = tempfile.gettempdir()
+    logo_path = os.path.join(tmp_dir, "company_logo.png")
+
     try:
         urllib.request.urlretrieve(logo_url, logo_path)
     except Exception:
         logo_path = None
 
+    # Place logo if exists
     if logo_path and os.path.exists(logo_path):
-        pdf.image(logo_path, 10, 4, 25)
+        pdf.image(logo_path, 10, 6, 25)  # (x, y, width)
+
+    # --- Header ---
     pdf.set_xy(40, 12)
-    pdf.set_font("DejaVu" if font_path else "Helvetica", "B", 18)
+    pdf.set_font("Helvetica", "B", 18)
     pdf.set_text_color(255, 165, 0)
-    pdf.cell(0, 10, "Solar Savings Summary", ln=1, align="L")
+    pdf.cell(0, 10, "Solar Savings Summary",
+             new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="L")
     pdf.set_text_color(*COLOR_TEXT)
     pdf.ln(10)
 
     # --- Section Helpers ---
     def section_header(title):
-        pdf.set_font("DejaVu" if font_path else "Helvetica", "B", 14)
+        pdf.set_font("Helvetica", "B", 14)
         pdf.set_fill_color(*COLOR_PRIMARY)
-        pdf.cell(0, 8, title, ln=1, align="L", fill=True)
-        pdf.set_font("DejaVu" if font_path else "Helvetica", "", 12)
+        pdf.cell(0, 8, title, new_x=XPos.LMARGIN,
+                 new_y=YPos.NEXT, align="L", fill=True)
+        pdf.set_font("Helvetica", "", 12)
+        pdf.ln(2)
 
     def add_table(rows, col1_width=95, col2_width=95):
         for label, val in rows:
             pdf.set_fill_color(*COLOR_SECONDARY)
             pdf.cell(col1_width, 8, label, border=1, fill=True)
-            pdf.cell(col2_width, 8, str(val), border=1, ln=1, fill=True)
+            pdf.cell(col2_width, 8, str(val), border=1,
+                     new_x=XPos.LMARGIN, new_y=YPos.NEXT, fill=True)
         pdf.ln(4)
 
     # --- Input Summary ---
@@ -309,16 +311,16 @@ def build_pdf(bill, raw_needed, pkg, c):
     add_table(metrics)
 
     # # --- Financial Summary ---
-    section_header("Financial Summary")
-    fin = [
-        ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
-        ("Installment (8% Interest)", f"RM {get_str('Installment 8% Interests')}"),
-        ("Installment (4 Years / Month)", f"RM {get_str('Installment 4 Years (RM)')}"),
-        ("ROI (Cash)", f"{get_str('roi_cash')} years"),
-        ("ROI (Credit)", f"{get_str('roi_cc')} years"),
-        ("O&M Fee (Monthly)", f"RM {get_str('om_fee_monthly')}"),
-    ]
-    add_table(fin)
+    # section_header("Financial Summary")
+    # fin = [
+    #     ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
+    #     ("Installment (8% Interest)", f"RM {get_str('Installment 8% Interests')}"),
+    #     ("Installment (4 Years / Month)", f"RM {get_str('Installment 4 Years (RM)')}"),
+    #     ("ROI (Cash)", f"{get_str('roi_cash')} years"),
+    #     ("ROI (Credit)", f"{get_str('roi_cc')} years"),
+    #     ("O&M Fee (Monthly)", f"RM {get_str('om_fee_monthly')}"),
+    # ]
+    # add_table(fin)
 
     # --- Environmental Impact ---
     section_header("Environmental Impact")
@@ -330,21 +332,23 @@ def build_pdf(bill, raw_needed, pkg, c):
     add_table(env)
 
     # --- Footer ---
-    pdf.set_font("DejaVu" if font_path else "Helvetica", "I", 9)
+    pdf.set_font("Helvetica", "I", 9)
     pdf.set_text_color(120, 120, 120)
     pdf.multi_cell(
-        0,
-        5,
-        "Note: Figures are estimates and may vary based on site conditions, weather, and system performance.\n",
+        0, 5,
+        "Note: Figures are estimates and may vary based on site conditions, weather, and system performance.",
         align="L"
     )
 
-    # --- Output PDF as bytes (compatible with fpdf2) ---
+    # --- Output PDF correctly ---
     pdf_bytes = pdf.output(dest="S")
-    if isinstance(pdf_bytes, str):  # old FPDF returns str
-        pdf_bytes = pdf_bytes.encode("latin-1", "ignore")
+    if isinstance(pdf_bytes, str):  # old FPDF
+        pdf_bytes = pdf_bytes.encode("latin-1")
+    elif isinstance(pdf_bytes, bytearray):  # new FPDF
+        pdf_bytes = bytes(pdf_bytes)
 
     return io.BytesIO(pdf_bytes)
+
 
 def main():
     st.title("☀️ Solar Savings Calculator")
@@ -456,8 +460,8 @@ def main():
         # --- Step 5: Daytime usage selection ---
         daytime_option = st.radio(
             "Select estimated daytime usage portion:",
-            options=[0.3, 0.5, 0.7],
-            index=[0.3, 0.5, 0.7].index(st.session_state.get("daytime_option", 0.7) if st.session_state.get("daytime_option", 0.7) in [0.3, 0.5, 0.7] else 0.7),
+            options=[0.2, 0.3, 0.5, 0.7],
+            index=[0.2, 0.3, 0.5, 0.7].index(st.session_state.get("daytime_option", 0.7) if st.session_state.get("daytime_option", 0.7) in [0.2, 0.3, 0.5, 0.7] else 0.7),
             format_func=lambda x: f"{int(x*100)}% daytime usage",
             horizontal=True,
             help="Estimate how much of your solar energy is used directly during the day."
@@ -469,9 +473,8 @@ def main():
 
         # --- Step 7: Recommended number of panels ---
         raw_needed = math.ceil(est_kwh / per_panel_monthly_total)
-        recommended = min(max(raw_needed, 10), 100)  # ensure slightly under but not below 10
+        recommended = min(max(raw_needed, 10), 100)
 
-        # Reset slider default if area (sunlight_hours) changed
         if "last_sunlight" not in st.session_state or st.session_state.last_sunlight != sunlight_hours:
             st.session_state.pkg = recommended
             st.session_state.last_sunlight = sunlight_hours
@@ -480,92 +483,105 @@ def main():
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
-            max_value=50,
+            max_value=100,
             step=1,
             value=st.session_state.get("pkg", recommended),
             help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
         )
-        st.session_state.pkg = pkg  # persist selection
+        st.session_state.pkg = pkg
 
-        # --- Step 9: Solar generation and savings ---
+        # --- Battery option ---
+        include_battery = st.checkbox("🔋 Include Battery Storage?", value=st.session_state.get("include_battery", False))
+        st.session_state.include_battery = include_battery
+
+        battery_kwh = 0
+        battery_price = 0
+
+        if include_battery:
+            solar_capacity_kw = (pkg * PANEL_WATT) / 1000
+            est_capacity = solar_capacity_kw * 2
+            battery_kwh = max(10, math.floor(est_capacity / 5) * 5)
+            battery_price = (battery_kwh / 5) * 3300
+
+        st.session_state.battery_kwh = battery_kwh
+        st.session_state.battery_price = battery_price
+
+        # --- Step 9: Solar generation & battery logic ---
         total_solar_kwh = per_panel_monthly_total * pkg
 
-        # Split generation into direct usage vs export
-        direct_used_kwh = total_solar_kwh * daytime_option
-        exported_kwh = total_solar_kwh - direct_used_kwh
+        # Daily values
+        daily_solar = total_solar_kwh / 30
+        daily_usage = est_kwh / 30
+        daily_day_use = daily_usage * daytime_option
+        daily_night_use = daily_usage * (1 - daytime_option)
 
-        # --- Export (SMP) fixed rate ---
-        export_rate = 0.25  # RM/kWh
+        # Direct daytime usage
+        direct_used_day = min(daily_solar, daily_day_use)
+        excess_after_day = daily_solar - direct_used_day
 
-        # Calculate savings
+        # Battery charging
+        if include_battery:
+            battery_capacity = battery_kwh
+            battery_store = min(excess_after_day, battery_capacity)
+            solar_left_after_battery = excess_after_day - battery_store
+        else:
+            battery_store = 0
+            solar_left_after_battery = excess_after_day
+
+        # Nighttime usage offset from battery
+        if include_battery:
+            battery_discharge = min(battery_store, daily_night_use)
+            night_from_grid = daily_night_use - battery_discharge
+        else:
+            battery_discharge = 0
+            night_from_grid = daily_night_use
+
+        # Export only if all battery is full
+        export_kwh_daily = max(solar_left_after_battery, 0)
+
+        # Convert back to monthly
+        direct_used_kwh = direct_used_day * 30
+        battery_charge_kwh = battery_store * 30
+        battery_to_night_kwh = battery_discharge * 30
+        night_from_grid_kwh = night_from_grid * 30
+        exported_kwh = export_kwh_daily * 30
+
+        # --- Step 10: Savings calculations ---
+        export_rate = 0.25
+
         direct_saving_rm = direct_used_kwh * GENERAL_TARIFF
+        battery_saving_rm = battery_to_night_kwh * GENERAL_TARIFF
         export_credit_rm = exported_kwh * export_rate
-        total_saving_rm = direct_saving_rm + export_credit_rm
 
-        # --- Step 10: Calculate detailed new bill ---
-        night_kwh = est_kwh * (1 - daytime_option)
+        total_saving_rm = direct_saving_rm + battery_saving_rm + export_credit_rm
 
-        # Individual charges for night usage
+        # --- Step 11: Bill calculation using NIGHT FROM GRID ---
         def get_energy_charge_rate(monthly_bill):
             est_kwh = monthly_bill / GENERAL_TARIFF
-            if est_kwh <= 1500:
-                return 0.2703
-            else:
-                return 0.3703
+            return 0.2703 if est_kwh <= 1500 else 0.3703
 
-        energy_charge_rm = night_kwh * get_energy_charge_rate(bill)
-        network_charge_rm = night_kwh * 0.1285
-        capacity_charge_rm = night_kwh * 0.0455
+        energy_charge_rm = night_from_grid_kwh * get_energy_charge_rate(bill)
+        network_charge_rm = night_from_grid_kwh * 0.1285
+        capacity_charge_rm = night_from_grid_kwh * 0.0455
         retail_charge_rm = 10.0
 
-        # Subtotal before taxes
-        subtotal_rm = energy_charge_rm + network_charge_rm + capacity_charge_rm - export_credit_rm + retail_charge_rm
-        subtotal_rm = max(subtotal_rm, 0)  # prevent negative subtotal
+        # Apply export credit to energy charge
+        energy_charge_after_offset = max(energy_charge_rm - export_credit_rm, 0)
 
-        # Taxes
-        kwtbb_rm = subtotal_rm * 0.016  # 1.6%
+        subtotal_rm = (
+            energy_charge_after_offset
+            + network_charge_rm
+            + capacity_charge_rm
+            + retail_charge_rm
+        )
+
+        kwtbb_rm = subtotal_rm * 0.016
         after_kwtbb_rm = subtotal_rm + kwtbb_rm
+        sst_rm = after_kwtbb_rm * 0.08
 
-        sst_rm = after_kwtbb_rm * 0.08  # 8%
         final_new_bill_rm = after_kwtbb_rm + sst_rm
 
-        # Final estimated saving
         estimated_saving_rm = max(bill - final_new_bill_rm, 0)
-
-        st.divider()
-
-        # --- Step 11: Display results ---
-        st.markdown(
-            f"""
-            ## ☀️ Solar Generation & Usage
-            - **Monthly consumption:** {est_kwh:.0f} kWh
-            - **Total solar generation:** {total_solar_kwh:.0f} kWh/month  
-            - **Directly used:** {direct_used_kwh:.0f} kWh × RM {GENERAL_TARIFF:.4f} = RM {direct_saving_rm:.2f}  
-            - **Exported:** {exported_kwh:.0f} kWh × RM {export_rate:.4f} = RM {export_credit_rm:.2f}  
-
-            ## 🧾 New Monthly Bill Breakdown (with Formulas)
-            ### 🌙 Nighttime Usage Charges  
-            **Nighttime kWh:** {night_kwh:.0f}  
-
-            | Charge Type | Formula | Amount (RM) |
-            |--------------|----------|-------------|
-            | Energy Charge | {night_kwh:.0f} × {get_energy_charge_rate(bill):.4f} | {energy_charge_rm:.2f} |
-            | Network Charge | {night_kwh:.0f} × 0.1285 | {network_charge_rm:.2f} |
-            | Capacity Charge | {night_kwh:.0f} × 0.0455 | {capacity_charge_rm:.2f} |
-            | Retail Charge | Flat RM 10 | {retail_charge_rm:.2f} |
-            | Export Credit | - {exported_kwh:.0f} × {export_rate:.4f} | -{export_credit_rm:.2f} |
-
-            **Subtotal (before tax)** = (Energy + Network + Capacity + Retail - Export)  
-            → RM {subtotal_rm:.2f}  
-
-            ### ⚡ Taxes & Fees
-            - **KWTBB (1.6%)** = {subtotal_rm:.2f} × 1.6% = RM {kwtbb_rm:.2f}  
-            - **After KWTBB:** RM {after_kwtbb_rm:.2f}  
-            - **SST (8%)** = {after_kwtbb_rm:.2f} × 8% = RM {sst_rm:.2f}  
-            - **Final New Monthly Bill:** RM {final_new_bill_rm:.2f}  
-            """,
-            unsafe_allow_html=True
-        )
 
         # --- Step 12: Summary ---
         st.success(
@@ -573,27 +589,55 @@ def main():
             💰 **Estimated Monthly Saving:** RM {estimated_saving_rm:,.2f}  
             🧾 **New Bill (after solar):** RM {final_new_bill_rm:,.2f}  
             ☀️ **Solar Generation:** {total_solar_kwh:.0f} kWh/month  
+            🔋 Battery Charge: {battery_charge_kwh:.0f} kWh/month  
+            🌙 Nighttime Offset from Battery: {battery_to_night_kwh:.0f} kWh/month  
+            📤 Exported Energy: {exported_kwh:.0f} kWh/month  
             Recommended Panels: **{recommended}**
             """
         )
 
         st.markdown(
-            f"_Note: Savings depend on your actual daytime consumption and export credit rate._",
+            f"_Note: Savings depend on your actual daytime consumption, nighttime usage, and export credit rate._",
             unsafe_allow_html=True
         )
 
-        # --- 2) Run calculation using your function ---
+        # --- Your calculate_values integration ---
         c = calculate_values(pkg, sunlight_hours if sunlight_hours else 3.5, bill, daytime_option)
 
-        # --- 3) Override financial data ---
-        c["Cost Cash (RM)"] = float(c["Total Cost (RM)"].replace(',', ""))
-        c["Cost CC (RM)"]   = c["cost_cc"]
-        c["ROI Cash (%)"] = c["roi_cash"]
-        c["ROI CC (%)"]   = c["roi_cc"]
+        if include_battery:
+            # Parsing helper
+            def parse_float(val):
+                try:
+                    return float(str(val).replace(",", ""))
+                except:
+                    return 0.0
 
-        # --- 4) O&M rounding logic ---
+            cost_cash_val = parse_float(c.get("Total Cost (RM)", 0))
+            battery_price_val = float(battery_price) if include_battery else 0
+
+            total_cost_with_battery = cost_cash_val + battery_price_val
+
+            interest_rate = 0.08
+            months = 48
+            installment_total = total_cost_with_battery * (1 + interest_rate)
+            installment_monthly = installment_total / months
+
+            yearly_saving_rm = parse_float(c.get("Yearly Saving (RM)", 0))
+            roi_cash_years = total_cost_with_battery / yearly_saving_rm if yearly_saving_rm else float("inf")
+            roi_cc_years = installment_total / yearly_saving_rm if yearly_saving_rm else float("inf")
+
+            c["Total Cost (RM)"] = f"{total_cost_with_battery:,.0f}"
+            c["Installment 8% Interests"] = f"{installment_total:,.0f}"
+            c["Installment 4 Years (RM)"] = f"{installment_monthly:,.2f}"
+            c["roi_cash"] = f"{roi_cash_years:.2f}".rstrip("0").rstrip(".")
+            c["roi_cc"] = f"{roi_cc_years:.2f}".rstrip("0").rstrip(".")
+            c['include_battery'] = include_battery
+            c['new_monthly'] = f"{final_new_bill_rm:,.0f}"
+            c["Monthly Saving (RM)"] = f"{estimated_saving_rm:,.0f}"
+
+        # --- 5) O&M rounding logic ---
         raw_sav = float(str(c["Monthly Saving (RM)"]).replace(",", ""))
-        rem       = raw_sav % 100
+        rem = raw_sav % 100
         base_hund = raw_sav - rem
 
         if rem > 40:
@@ -654,6 +698,15 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
+        # Show battery info if applicable
+        if c.get("include_battery"):
+            st.markdown(f"""
+            <div class="grid-container">
+            <div class="card"><div class="title">Battery Storage</div><div class="value">{c['Battery Capacity (kWh)']} kWh</div></div>
+            <div class="card"><div class="title">Battery Cost</div><div class="value">RM {c['Battery Price (RM)']}</div></div>
+            </div>
+            """, unsafe_allow_html=True)
+
         # === PANEL & SAVINGS SUMMARY ===
         st.subheader("🔆 Panel & Savings Summary")
         st.markdown(f"""
@@ -681,8 +734,16 @@ def main():
         <div class="card"><div class="title">Installment (4 Years)</div><div class="value">RM {c['Installment 4 Years (RM)']}</div></div>
         <div class="card"><div class="title">Estimated ROI (Cash)</div><div class="value">{c['roi_cash']} yrs</div></div>
         <div class="card"><div class="title">Estimated ROI (CC)</div><div class="value">{c['roi_cc']} yrs</div></div>
-        </div>
         """, unsafe_allow_html=True)
+
+        # Show battery info if applicable
+        if c.get("include_battery"):
+            st.markdown(f"""
+            <div class="grid-container">
+            <div class="card"><div class="title">Battery Storage</div><div class="value">{c['Battery Capacity (kWh)']} kWh</div></div>
+            <div class="card"><div class="title">Battery Cost</div><div class="value">RM {c['Battery Price (RM)']}</div></div>
+            </div>
+            """, unsafe_allow_html=True)
 
         # === ENVIRONMENTAL BENEFITS ===
         st.subheader("🌳 Environmental Benefits")
@@ -702,6 +763,47 @@ def main():
             file_name="solar_savings_report.pdf",
             mime="application/pdf"
         )
+
+        # --- Step 11: Display results ---
+        st.markdown(
+            f"""
+            ## ☀️ Solar Generation & Usage
+            - **Monthly consumption:** {est_kwh:.0f} kWh  
+            - **Total solar generation:** {total_solar_kwh:.0f} kWh/month  
+            - **Direct daytime usage:** {direct_used_kwh:.0f} kWh × RM {GENERAL_TARIFF:.4f} = RM {direct_saving_rm:.2f}  
+            {"- **Battery discharge (nighttime offset):** " + f"{battery_to_night_kwh:.0f} kWh × RM {GENERAL_TARIFF:.4f} = RM {battery_saving_rm:.2f}" if include_battery else ""}
+            - **Exported:** {exported_kwh:.0f} kWh × RM {export_rate:.4f} = RM {export_credit_rm:.2f}  
+
+            ## 🔋 Battery Flow Breakdown {("(Enabled)" if include_battery else "(Not used)")}
+            - **Battery capacity:** {battery_kwh:.0f} kWh  
+            - **Solar stored into battery:** {battery_charge_kwh:.0f} kWh/month  
+            - **Battery discharged at night:** {battery_to_night_kwh:.0f} kWh/month  
+            - **Nighttime grid usage:** {night_from_grid_kwh:.0f} kWh/month  
+
+            ## 🧾 New Monthly Bill Breakdown (with Formulas)
+            ### 🌙 Nighttime Charges (after battery offset)
+            **Nighttime kWh (from grid):** {night_from_grid_kwh:.0f}
+
+            | Charge Type | Formula | Amount (RM) |
+            |--------------|----------|-------------|
+            | Energy Charge | {night_from_grid_kwh:.0f} × {get_energy_charge_rate(bill):.4f} | {energy_charge_rm:.2f} |
+            | Network Charge | {night_from_grid_kwh:.0f} × 0.1285 | {network_charge_rm:.2f} |
+            | Capacity Charge | {night_from_grid_kwh:.0f} × 0.0455 | {capacity_charge_rm:.2f} |
+            | Retail Charge | Flat RM 10 | {retail_charge_rm:.2f} |
+            | Export Credit | - {exported_kwh:.0f} × {export_rate:.4f} | -{export_credit_rm:.2f} |
+
+            **Subtotal (before tax)** = (Energy + Network + Capacity + Retail - Export)  
+            → **RM {subtotal_rm:.2f}**
+
+            ### ⚡ Taxes & Fees
+            - **KWTBB (1.6%)** = {subtotal_rm:.2f} × 1.6% = **RM {kwtbb_rm:.2f}**  
+            - **After KWTBB:** RM {after_kwtbb_rm:.2f}  
+            - **SST (8%)** = {after_kwtbb_rm:.2f} × 8% = **RM {sst_rm:.2f}**  
+            - **Final New Monthly Bill:** **RM {final_new_bill_rm:.2f}**
+            """,
+            unsafe_allow_html=True
+        )
+
 
 
 if __name__ == "__main__":
