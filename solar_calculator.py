@@ -298,6 +298,14 @@ def build_pdf(bill, raw_needed, pkg, c):
     ]
     add_table(system)
 
+    # --- Battery Details ---
+    section_header("Battery Details")
+    battery = [
+        ("Battery Capacity (kWh)", get_str("Battery Capacity (kWh)")),
+        ("Battery Price (RM)", get_str("Battery Price (RM)")),
+    ]
+    add_table(battery)
+
     # --- Key Metrics ---
     section_header("Key Metrics")
     metrics = [
@@ -310,17 +318,16 @@ def build_pdf(bill, raw_needed, pkg, c):
     ]
     add_table(metrics)
 
-    # # --- Financial Summary ---
-    # section_header("Financial Summary")
-    # fin = [
-    #     ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
-    #     ("Installment (8% Interest)", f"RM {get_str('Installment 8% Interests')}"),
-    #     ("Installment (4 Years / Month)", f"RM {get_str('Installment 4 Years (RM)')}"),
-    #     ("ROI (Cash)", f"{get_str('roi_cash')} years"),
-    #     ("ROI (Credit)", f"{get_str('roi_cc')} years"),
-    #     ("O&M Fee (Monthly)", f"RM {get_str('om_fee_monthly')}"),
-    # ]
-    # add_table(fin)
+    # --- Financial Summary ---
+    section_header("Financial Summary")
+    fin = [
+        ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
+        ("Installment (8% Interest)", f"RM {get_str('Installment 8% Interests')}"),
+        ("Installment (4 Years / Month)", f"RM {get_str('Installment 4 Years (RM)')}"),
+        ("ROI (Cash)", f"{get_str('roi_cash')} years"),
+        ("ROI (Credit)", f"{get_str('roi_cc')} years"),
+    ]
+    add_table(fin)
 
     # --- Environmental Impact ---
     section_header("Environmental Impact")
@@ -635,18 +642,18 @@ def main():
             c['new_monthly'] = f"{final_new_bill_rm:,.0f}"
             c["Monthly Saving (RM)"] = f"{estimated_saving_rm:,.0f}"
 
-        # --- 5) O&M rounding logic ---
-        raw_sav = float(str(c["Monthly Saving (RM)"]).replace(",", ""))
-        rem = raw_sav % 100
-        base_hund = raw_sav - rem
+        # # --- 5) O&M rounding logic ---
+        # raw_sav = float(str(c["Monthly Saving (RM)"]).replace(",", ""))
+        # rem = raw_sav % 100
+        # base_hund = raw_sav - rem
 
-        if rem > 40:
-            om_fee = base_hund + 100
-        else:
-            om_fee = base_hund
+        # if rem > 40:
+        #     om_fee = base_hund + 100
+        # else:
+        #     om_fee = base_hund
 
-        om_fee = max(500, min(om_fee, 1000))  # clamp
-        c["O&M Fee (RM)"] = om_fee
+        # om_fee = max(500, min(om_fee, 1000))  # clamp
+        # c["O&M Fee (RM)"] = om_fee
 
         # Inject card CSS
         st.markdown("""
