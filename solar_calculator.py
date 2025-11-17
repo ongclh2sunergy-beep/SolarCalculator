@@ -297,13 +297,14 @@ def build_pdf(bill, raw_needed, pkg, c):
     ]
     add_table(system)
 
-    # --- Battery Details ---
-    section_header("Battery Details")
-    battery = [
-        ("Battery Capacity (kWh)", get_str("Battery Capacity (kWh)")),
-        ("Battery Price (RM)", get_str("Battery Price (RM)")),
-    ]
-    add_table(battery)
+    if c.get("include_battery"):
+        # --- Battery Details ---
+        section_header("Battery Details")
+        battery = [
+            ("Battery Capacity (kWh)", get_str("Battery Capacity (kWh)")),
+            ("Battery Price (RM)", get_str("Battery Price (RM)")),
+        ]
+        add_table(battery)
 
     # --- Key Metrics ---
     section_header("Key Metrics")
