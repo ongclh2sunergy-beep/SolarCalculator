@@ -318,16 +318,16 @@ def build_pdf(bill, raw_needed, pkg, c):
     ]
     add_table(metrics)
 
-    # --- Financial Summary ---
-    section_header("Financial Summary")
-    fin = [
-        ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
-        ("Installment (8% Interest)", f"RM {get_str('Installment 8% Interests')}"),
-        ("Installment (4 Years / Month)", f"RM {get_str('Installment 4 Years (RM)')}"),
-        ("ROI (Cash)", f"{get_str('roi_cash')} years"),
-        ("ROI (Credit)", f"{get_str('roi_cc')} years"),
-    ]
-    add_table(fin)
+    # # --- Financial Summary ---
+    # section_header("Financial Summary")
+    # fin = [
+    #     ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
+    #     ("Installment (8% Interest)", f"RM {get_str('Installment 8% Interests')}"),
+    #     ("Installment (4 Years / Month)", f"RM {get_str('Installment 4 Years (RM)')}"),
+    #     ("ROI (Cash)", f"{get_str('roi_cash')} years"),
+    #     ("ROI (Credit)", f"{get_str('roi_cc')} years"),
+    # ]
+    # add_table(fin)
 
     # --- Environmental Impact ---
     section_header("Environmental Impact")
