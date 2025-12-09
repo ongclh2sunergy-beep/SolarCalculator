@@ -89,7 +89,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     exported_kwh = total_solar_kwh - direct_used_kwh
 
     # --- Step 8: Export rate ---
-    export_rate = 0.25  # fixed SMP rate
+    export_rate = 0.20  # fixed SMP rate
     export_credit_rm = exported_kwh * export_rate
 
     # --- Step 9: Night usage and new bill calculation ---
@@ -554,7 +554,7 @@ def main():
         exported_kwh = export_kwh_daily * 30
 
         # --- Step 10: Savings calculations ---
-        export_rate = 0.25
+        export_rate = 0.20
 
         direct_saving_rm = direct_used_kwh * GENERAL_TARIFF
         battery_saving_rm = battery_to_night_kwh * GENERAL_TARIFF
