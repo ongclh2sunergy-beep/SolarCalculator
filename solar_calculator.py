@@ -76,8 +76,17 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     per_panel_monthly_total = (PANEL_WATT / 1000) * sunlight_hours * 30
     per_panel_daytime_kwh = per_panel_monthly_total
 
-    # --- Step 6: Recommended panels ---
+    # --- Step 6: Recommended panels (EVEN PANEL RULE) ---
     raw_needed = math.ceil(target_kwh / per_panel_monthly_total)
+
+    # Ensure even number
+    if raw_needed % 2 != 0:
+        raw_needed += 1
+
+    # If low daytime usage → add 2 panels
+    if daytime_option in [0.2, 0.3]:
+        raw_needed += 2
+
     recommended = max(min(raw_needed, 100), 10)
 
     # --- Step 7: System yield ---
@@ -480,21 +489,42 @@ def main():
 
         # --- Step 7: Recommended number of panels ---
         raw_needed = math.ceil(est_kwh / per_panel_monthly_total)
+
+        # Force even number
+        if raw_needed % 2 != 0:
+            raw_needed += 1
+
+        # Add +2 panels if daytime usage is 20% or 30%
+        if daytime_option in [0.2, 0.3]:
+            raw_needed += 2
+
+        # Keep within 10–100 range
         recommended = min(max(raw_needed, 10), 100)
 
+        # Reset slider if sunlight changed
         if "last_sunlight" not in st.session_state or st.session_state.last_sunlight != sunlight_hours:
             st.session_state.pkg = recommended
             st.session_state.last_sunlight = sunlight_hours
+
+        # Reset slider if daytime option changed
+        if "last_daytime_option" not in st.session_state or st.session_state.last_daytime_option != daytime_option:
+            st.session_state.pkg = recommended
+            st.session_state.last_daytime_option = daytime_option
 
         # --- Step 8: Panel count slider ---
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
             max_value=100,
-            step=1,
+            step=2,
             value=st.session_state.get("pkg", recommended),
             help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
         )
+
+        # Safety: ensure even
+        if pkg % 2 != 0:
+            pkg += 1
+
         st.session_state.pkg = pkg
 
         # --- Battery option ---
