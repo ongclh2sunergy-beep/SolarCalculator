@@ -515,7 +515,7 @@ def main():
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
-            max_value=200,
+            max_value=100,
             step=1,
             value=st.session_state.get("pkg", recommended),
             help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
