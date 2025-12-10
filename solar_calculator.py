@@ -87,7 +87,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     if daytime_option in [0.2, 0.3]:
         raw_needed += 2
 
-    recommended = max(min(raw_needed, 100), 10)
+    recommended = max(min(raw_needed, 200), 10)
 
     # --- Step 7: System yield ---
     kwp = no_panels * PANEL_WATT / 1000
@@ -499,7 +499,7 @@ def main():
             raw_needed += 2
 
         # Keep within 10–100 range
-        recommended = min(max(raw_needed, 10), 100)
+        recommended = min(max(raw_needed, 10), 200)
 
         # Reset slider if sunlight changed
         if "last_sunlight" not in st.session_state or st.session_state.last_sunlight != sunlight_hours:
@@ -515,7 +515,7 @@ def main():
         pkg = st.slider(
             "Number of panels:",
             min_value=10,
-            max_value=100,
+            max_value=200,
             step=1,
             value=st.session_state.get("pkg", recommended),
             help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
