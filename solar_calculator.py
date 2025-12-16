@@ -659,7 +659,7 @@ def main():
             installment_total = total_cost_with_battery * (1 + interest_rate)
             installment_monthly = installment_total / months
 
-            yearly_saving_rm = parse_float(c.get("Yearly Saving (RM)", 0))
+            yearly_saving_rm = float(estimated_saving_rm) * 12
             roi_cash_years = total_cost_with_battery / yearly_saving_rm if yearly_saving_rm else float("inf")
             roi_cc_years = installment_total / yearly_saving_rm if yearly_saving_rm else float("inf")
 
