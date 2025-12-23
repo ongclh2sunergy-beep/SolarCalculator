@@ -83,10 +83,6 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     if raw_needed % 2 != 0:
         raw_needed += 1
 
-    # If low daytime usage → add 2 panels
-    if daytime_option in [0.2, 0.3]:
-        raw_needed += 2
-
     recommended = max(min(raw_needed, 200), 10)
 
     # --- Step 7: System yield ---
@@ -98,7 +94,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     exported_kwh = total_solar_kwh - direct_used_kwh
 
     # --- Step 8: Export rate ---
-    export_rate = 0.20  # fixed SMP rate
+    export_rate = (0.2703 if est_kwh <= 1500 else 0.3703) # fixed SMP rate
     export_credit_rm = exported_kwh * export_rate
 
     # --- Step 9: Night usage and new bill calculation ---
@@ -494,10 +490,6 @@ def main():
         if raw_needed % 2 != 0:
             raw_needed += 1
 
-        # Add +2 panels if daytime usage is 20% or 30%
-        if daytime_option in [0.2, 0.3]:
-            raw_needed += 2
-
         # Keep within 10–100 range
         recommended = min(max(raw_needed, 10), 200)
 
@@ -521,11 +513,11 @@ def main():
             help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
         )
 
-        # Safety: ensure even
-        if pkg % 2 != 0:
-            pkg += 1
+        # # Safety: ensure even
+        # if pkg % 2 != 0:
+        #     pkg += 1
 
-        st.session_state.pkg = pkg
+        # st.session_state.pkg = pkg
 
         # --- Battery option ---
         include_battery = st.checkbox("🔋 Include Battery Storage?", value=st.session_state.get("include_battery", False))
@@ -584,7 +576,7 @@ def main():
         exported_kwh = export_kwh_daily * 30
 
         # --- Step 10: Savings calculations ---
-        export_rate = 0.20
+        export_rate = (0.2703 if est_kwh <= 1500 else 0.3703)
 
         direct_saving_rm = direct_used_kwh * GENERAL_TARIFF
         battery_saving_rm = battery_to_night_kwh * GENERAL_TARIFF
