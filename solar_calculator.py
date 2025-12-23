@@ -104,7 +104,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     energy_charge_rm = night_kwh * (0.2703 if est_kwh <= 1500 else 0.3703)
     network_charge_rm = night_kwh * 0.1285
     capacity_charge_rm = night_kwh * 0.0455
-    retail_charge_rm = 10.0
+    retail_charge_rm = 0.0 if est_kwh < 600 else 10.0
 
     # Apply export credit ONLY to the energy charge
     energy_charge_after_offset = max(energy_charge_rm - export_credit_rm, 0)
@@ -119,10 +119,18 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     subtotal_rm = max(subtotal_rm, 0)
 
     # Taxes
-    kwtbb_rm = subtotal_rm * 0.016
-    after_kwtbb_rm = subtotal_rm + kwtbb_rm
-    sst_rm = after_kwtbb_rm * 0.08
-    final_new_bill_rm = after_kwtbb_rm + sst_rm
+    if est_kwh < 600:
+        kwtbb_rm = 0.0
+        sst_rm = 0.0
+        final_new_bill_rm = subtotal_rm
+    else:
+        # ✅ SST first
+        sst_rm = subtotal_rm * 0.08
+        after_sst_rm = subtotal_rm + sst_rm
+
+        # ✅ KWTBB after SST
+        kwtbb_rm = after_sst_rm * 0.016
+        final_new_bill_rm = after_sst_rm + kwtbb_rm
 
     # --- Step 10: Estimated Saving ---
     estimated_saving = max(monthly_bill - final_new_bill_rm, 0)
@@ -592,7 +600,7 @@ def main():
         energy_charge_rm = night_from_grid_kwh * get_energy_charge_rate(bill)
         network_charge_rm = night_from_grid_kwh * 0.1285
         capacity_charge_rm = night_from_grid_kwh * 0.0455
-        retail_charge_rm = 10.0
+        retail_charge_rm = 0.0 if est_kwh < 600 else 10.0
 
         # Apply export credit to energy charge
         energy_charge_after_offset = max(energy_charge_rm - export_credit_rm, 0)
@@ -604,11 +612,18 @@ def main():
             + retail_charge_rm
         )
 
-        kwtbb_rm = subtotal_rm * 0.016
-        after_kwtbb_rm = subtotal_rm + kwtbb_rm
-        sst_rm = after_kwtbb_rm * 0.08
+        if est_kwh < 600:
+            kwtbb_rm = 0.0
+            sst_rm = 0.0
+            final_new_bill_rm = subtotal_rm
+        else:
+            # ✅ SST first
+            sst_rm = subtotal_rm * 0.08
+            after_sst_rm = subtotal_rm + sst_rm
 
-        final_new_bill_rm = after_kwtbb_rm + sst_rm
+            # ✅ KWTBB after SST
+            kwtbb_rm = after_sst_rm * 0.016
+            final_new_bill_rm = after_sst_rm + kwtbb_rm
 
         estimated_saving_rm = max(bill - final_new_bill_rm, 0)
 
@@ -814,21 +829,32 @@ def main():
             **Nighttime kWh (from grid):** {night_from_grid_kwh:.0f}
 
             | Charge Type | Formula | Amount (RM) |
-            |--------------|----------|-------------|
+            |-------------|---------|-------------|
             | Energy Charge | {night_from_grid_kwh:.0f} × {get_energy_charge_rate(bill):.4f} | {energy_charge_rm:.2f} |
             | Network Charge | {night_from_grid_kwh:.0f} × 0.1285 | {network_charge_rm:.2f} |
             | Capacity Charge | {night_from_grid_kwh:.0f} × 0.0455 | {capacity_charge_rm:.2f} |
-            | Retail Charge | Flat RM 10 | {retail_charge_rm:.2f} |
-            | Export Credit | - {exported_kwh:.0f} × {export_rate:.4f} | -{export_credit_rm:.2f} |
+            | Retail Charge | {"❌ Waived" if est_kwh < 600 else "Flat RM 10"} | {0.00 if est_kwh < 600 else retail_charge_rm:.2f} |
+            | Export Credit | − {exported_kwh:.0f} × {export_rate:.4f} | −{export_credit_rm:.2f} |
 
-            **Subtotal (before tax)** = (Energy + Network + Capacity + Retail - Export)  
+            **Subtotal (before tax)**  
             → **RM {subtotal_rm:.2f}**
 
             ### ⚡ Taxes & Fees
-            - **KWTBB (1.6%)** = {subtotal_rm:.2f} × 1.6% = **RM {kwtbb_rm:.2f}**  
-            - **After KWTBB:** RM {after_kwtbb_rm:.2f}  
-            - **SST (8%)** = {after_kwtbb_rm:.2f} × 8% = **RM {sst_rm:.2f}**  
-            - **Final New Monthly Bill:** **RM {final_new_bill_rm:.2f}**
+            {
+                f'''
+                - **SST (8%)** = {subtotal_rm:.2f} × 8% = **RM {sst_rm:.2f}**  
+                - **After SST:** RM {after_sst_rm:.2f}  
+                - **KWTBB (1.6%)** = {after_sst_rm:.2f} × 1.6% = **RM {kwtbb_rm:.2f}**  
+                - **Final New Monthly Bill:** **RM {final_new_bill_rm:.2f}**
+                '''
+                if est_kwh >= 600 else
+                f'''
+                - **Retail Charge:** ❌ Waived  
+                - **SST (8%)**: ❌ Waived  
+                - **KWTBB (1.6%)**: ❌ Waived  
+                - **Final New Monthly Bill:** **RM {final_new_bill_rm:.2f}**
+                '''
+            }
             """,
             unsafe_allow_html=True
         )
