@@ -521,12 +521,6 @@ def main():
             help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
         )
 
-        # # Safety: ensure even
-        # if pkg % 2 != 0:
-        #     pkg += 1
-
-        # st.session_state.pkg = pkg
-
         # --- Battery option ---
         include_battery = st.checkbox("🔋 Include Battery Storage?", value=st.session_state.get("include_battery", False))
         st.session_state.include_battery = include_battery
@@ -679,19 +673,6 @@ def main():
             c['new_monthly'] = f"{final_new_bill_rm:,.0f}"
             c["Monthly Saving (RM)"] = f"{estimated_saving_rm:,.0f}"
 
-        # # --- 5) O&M rounding logic ---
-        # raw_sav = float(str(c["Monthly Saving (RM)"]).replace(",", ""))
-        # rem = raw_sav % 100
-        # base_hund = raw_sav - rem
-
-        # if rem > 40:
-        #     om_fee = base_hund + 100
-        # else:
-        #     om_fee = base_hund
-
-        # om_fee = max(500, min(om_fee, 1000))  # clamp
-        # c["O&M Fee (RM)"] = om_fee
-
         # Inject card CSS
         st.markdown("""
         <style>
@@ -835,6 +816,8 @@ def main():
             | Capacity Charge | {night_from_grid_kwh:.0f} × 0.0455 | {capacity_charge_rm:.2f} |
             | Retail Charge | {"❌ Waived" if est_kwh < 600 else "Flat RM 10"} | {0.00 if est_kwh < 600 else retail_charge_rm:.2f} |
             | Export Credit | − {exported_kwh:.0f} × {export_rate:.4f} | −{export_credit_rm:.2f} |
+
+            _Note: Only can fully offset Energy Charge only._
 
             **Subtotal (before tax)**  
             → **RM {subtotal_rm:.2f}**
