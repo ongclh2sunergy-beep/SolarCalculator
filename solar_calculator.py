@@ -481,7 +481,7 @@ def main():
         daytime_option = st.radio(
             "Select estimated daytime usage portion:",
             options=[0.2, 0.3, 0.5, 0.7],
-            index=[0.2, 0.3, 0.5, 0.7].index(st.session_state.get("daytime_option", 0.7) if st.session_state.get("daytime_option", 0.7) in [0.2, 0.3, 0.5, 0.7] else 0.7),
+            index=[0.2, 0.3, 0.5, 0.7].index(st.session_state.get("daytime_option", 0.3) if st.session_state.get("daytime_option", 0.3) in [0.2, 0.3, 0.5, 0.7] else 0.3),
             format_func=lambda x: f"{int(x*100)}% daytime usage",
             horizontal=True,
             help="Estimate how much of your solar energy is used directly during the day."
@@ -822,22 +822,21 @@ def main():
             **Subtotal (before tax)**  
             → **RM {subtotal_rm:.2f}**
 
-            ### ⚡ Taxes & Fees
-            {
-                f'''
-                - **SST (8%)** = {subtotal_rm:.2f} × 8% = **RM {sst_rm:.2f}**  
-                - **After SST:** RM {after_sst_rm:.2f}  
-                - **KWTBB (1.6%)** = {after_sst_rm:.2f} × 1.6% = **RM {kwtbb_rm:.2f}**  
-                - **Final New Monthly Bill:** **RM {final_new_bill_rm:.2f}**
-                '''
-                if est_kwh >= 600 else
-                f'''
-                - **Retail Charge:** ❌ Waived  
-                - **SST (8%)**: ❌ Waived  
-                - **KWTBB (1.6%)**: ❌ Waived  
-                - **Final New Monthly Bill:** **RM {final_new_bill_rm:.2f}**
-                '''
-            }
+            ## ⚡ Taxes & Fees
+
+            **SST (8%)**  
+            {"❌ Waived" if est_kwh < 600 else f"{subtotal_rm:.2f} × 8% → **RM {sst_rm:.2f}**"}
+
+            **After SST**  
+            {"RM {:.2f}".format(after_sst_rm) if est_kwh >= 600 else "RM 0.00"}
+
+            **KWTBB (1.6%)**  
+            {"❌ Waived" if est_kwh < 600 else f"{after_sst_rm:.2f} × 1.6% → **RM {kwtbb_rm:.2f}**"}
+
+            ---
+
+            ### ✅ **Final New Monthly Bill**
+            #### 💰 **RM {final_new_bill_rm:.2f}**
             """,
             unsafe_allow_html=True
         )
