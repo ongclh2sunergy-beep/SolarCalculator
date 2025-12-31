@@ -221,9 +221,8 @@ def get_energy_charge_rate(monthly_bill):
 def build_pdf(bill, raw_needed, pkg, c):
     import io, re, os, urllib.request, tempfile
     from fpdf import FPDF
-    # from fpdf.enums import XPos, YPos
 
-    # --- Helper: clean number strings ---
+    # ---------- Helpers ----------
     def clean_number(x):
         if x is None:
             return 0.0
@@ -237,135 +236,157 @@ def build_pdf(bill, raw_needed, pkg, c):
                 return 0.0
         return 0.0
 
-    def get_num(key): return clean_number(c.get(key))
-    def get_str(key): return str(c.get(key) or "")
+    def get_str(key):
+        return str(c.get(key) or "-")
 
-    # --- Setup PDF ---
+    # ---------- PDF Setup ----------
     pdf = FPDF()
     pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
-    pdf.set_font("Helvetica", "", 12)
 
-    # === Solar Theme Colors ===
-    COLOR_PRIMARY = (255, 193, 7)     # yellow
-    COLOR_SECONDARY = (255, 243, 205) # light background
-    COLOR_TEXT = (60, 60, 60)
+    # ---------- Color Palette ----------
+    GREEN = (76, 175, 80)
+    YELLOW = (255, 193, 7)
+    LIGHT_BG = (255, 249, 230)
+    TEXT = (60, 60, 60)
+    GREY = (140, 140, 140)
 
-    # --- Header (with logo) ---
-    # Use a safe, downloadable image
+    # ---------- Header ----------
+    pdf.set_fill_color(*GREEN)
+    pdf.rect(0, 0, 210, 30, "F")
+
     logo_url = "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRvUrQzbNoJwW7pypHZ9yweCafrQtCWeKRjUg&s"
-    tmp_dir = tempfile.gettempdir()
-    logo_path = os.path.join(tmp_dir, "company_logo.png")
+    tmp = tempfile.gettempdir()
+    logo = os.path.join(tmp, "logo.png")
 
     try:
-        urllib.request.urlretrieve(logo_url, logo_path)
-    except Exception:
-        logo_path = None
+        urllib.request.urlretrieve(logo_url, logo)
+        pdf.image(logo, 10, 6, 18)
+    except:
+        pass
 
-    # Place logo if exists
-    if logo_path and os.path.exists(logo_path):
-        pdf.image(logo_path, 10, 6, 25)  # (x, y, width)
-
-    # --- Header ---
-    pdf.set_xy(40, 12)
+    pdf.set_xy(35, 8)
     pdf.set_font("Helvetica", "B", 18)
-    pdf.set_text_color(255, 165, 0)
-    pdf.cell(0, 10, "Solar Savings Summary",
-             ln=True, align="L")
-    pdf.set_text_color(*COLOR_TEXT)
-    pdf.ln(10)
+    pdf.set_text_color(255, 255, 255)
+    pdf.cell(0, 10, "Preliminary Solar Assessment Report", ln=True)
 
-    # --- Section Helpers ---
-    def section_header(title):
-        pdf.set_font("Helvetica", "B", 14)
-        pdf.set_fill_color(*COLOR_PRIMARY)
-        pdf.cell(0, 8, title, ln=True, align="L", fill=True)
-        pdf.set_font("Helvetica", "", 12)
-        pdf.ln(2)
+    pdf.ln(20)
+    pdf.set_text_color(*TEXT)
 
-    def add_table(rows, col1_width=95, col2_width=95):
-        for label, val in rows:
-            pdf.set_fill_color(*COLOR_SECONDARY)
-            pdf.cell(col1_width, 8, label, border=1, fill=True)
-            pdf.cell(col2_width, 8, str(val), border=1,
-                     ln=True, fill=True)
+    # ---------- UI Components ----------
+    def section(title):
         pdf.ln(4)
+        pdf.set_font("Helvetica", "B", 14)
+        pdf.set_fill_color(*YELLOW)
+        pdf.cell(0, 9, f"  {title}", ln=True, fill=True)
+        pdf.ln(3)
 
-    # --- Input Summary ---
-    section_header("Input Summary")
-    inputs = [
+    def table(rows):
+        label_w, value_w = 100, 90
+        for label, value in rows:
+            pdf.set_font("Helvetica", "", 11)
+            pdf.set_fill_color(*LIGHT_BG)
+            pdf.cell(label_w, 8, label, border=1, fill=True)
+            pdf.set_font("Helvetica", "B", 11)
+            pdf.cell(value_w, 8, str(value), border=1, ln=True, fill=True, align="C")
+        pdf.ln(3)
+
+    def summary_block(rows, highlight_label=None):
+        start_y = pdf.get_y()
+        block_height = len(rows) * 9 + 6
+
+        pdf.set_fill_color(245, 245, 245)
+        pdf.rect(10, start_y, 190, block_height, "F")
+
+        pdf.ln(4)
+        for label, value in rows:
+            is_highlight = (label == highlight_label)
+
+            pdf.set_font("Helvetica", "B" if is_highlight else "", 11)
+            pdf.set_text_color(0, 0, 0 if is_highlight else 60)
+
+            pdf.cell(120, 8, label)
+            pdf.cell(0, 8, value, ln=True, align="C")
+
+        pdf.ln(6)
+        pdf.set_text_color(*TEXT)
+
+    # ---------- Input Summary ----------
+    section("Input Summary")
+    table([
         ("Monthly Bill (RM)", f"{float(bill):,.2f}" if bill else "0.00"),
-        ("Panel Needed", str(pkg)),
         ("Tariff Rate (RM/kWh)", get_str("general_tariff")),
         ("Estimated Monthly Consumption (kWh)", get_str("monthly_kwh")),
-    ]
-    add_table(inputs)
+    ])
 
-    # --- Solar System Summary ---
-    section_header("Solar System Details")
-    system = [
-        ("Installed kWp", get_str("kwp_installed")),
-        ("kWac Output", get_str("kwac")),
-        ("Per Panel Yield (kWh/mo)", get_str("per_panel_monthly_total")),
-    ]
-    add_table(system)
+    # ---------- System Size Overview (REDESIGNED) ----------
+    section("System Size Overview")
+    summary_block([
+        ("System Size", f"{get_str('kwp_installed')} kWp"),
+        ("Solar Panels Installed", f"{pkg} panels"),
+        ("Inverter Capacity", f"{get_str('kwac')} kWac"),
+        ("Battery Capacity", f"{get_str('Battery Capacity (kWh)')} kWh" if c.get("include_battery") else "-"),
+    ], highlight_label="Solar Panels Installed")
 
-    if c.get("include_battery"):
-        # --- Battery Details ---
-        section_header("Battery Details")
-        battery = [
-            ("Battery Capacity (kWh)", get_str("Battery Capacity (kWh)")),
-            ("Battery Price (RM)", get_str("Battery Price (RM)")),
-        ]
-        add_table(battery)
+    # ---------- Key Savings Overview (REDESIGNED) ----------
+    section("Key Savings Overview")
+    summary_block([
+        ("Estimated Monthly Saving", f"RM {get_str('Monthly Saving (RM)')}"),
+        ("Estimated Yearly Saving", f"RM {get_str('Yearly Saving (RM)')}"),
+        ("New Estimated Monthly Bill", f"RM {get_str('new_monthly')}"),
+    ], highlight_label="Estimated Monthly Saving")
 
-    # --- Key Metrics ---
-    section_header("Key Metrics")
-    metrics = [
+    # ---------- Key Metrics ----------
+    section("Key Metrics")
+    table([
         ("Monthly Generation (kWh)", get_str("monthly_gen_kwh")),
         ("Daytime Saving (kWh/day)", get_str("Daytime Saving (kWh)")),
         ("Daily Saving (RM)", get_str("Daily Saving (RM)")),
         ("Monthly Saving (RM)", get_str("Monthly Saving (RM)")),
         ("Yearly Saving (RM)", get_str("Yearly Saving (RM)")),
         ("New Monthly Bill (RM)", get_str("new_monthly")),
-    ]
-    add_table(metrics)
+    ])
 
-    # # --- Financial Summary ---
-    # section_header("Financial Summary")
-    # fin = [
-    #     ("Total System Cost (Cash)", f"RM {get_str('Total Cost (RM)')}"),
-    #     ("Installment (8% Interest)", f"RM {get_str('Installment 8% Interests')}"),
-    #     ("Installment (4 Years / Month)", f"RM {get_str('Installment 4 Years (RM)')}"),
-    #     ("ROI (Cash)", f"{get_str('roi_cash')} years"),
-    #     ("ROI (Credit)", f"{get_str('roi_cc')} years"),
-    # ]
-    # add_table(fin)
+    pdf.ln(15)
 
-    # --- Environmental Impact ---
-    section_header("Environmental Impact")
-    env = [
+    # ---------- Solar System Details ----------
+    section("Solar System Details")
+    table([
+        ("Installed Capacity (kWp)", get_str("kwp_installed")),
+        ("Inverter Output (kWac)", get_str("kwac")),
+        ("Per Panel Yield (kWh / month)", get_str("per_panel_monthly_total")),
+    ])
+
+    # ---------- Battery ----------
+    if c.get("include_battery"):
+        section("Battery Details")
+        table([
+            ("Battery Capacity (kWh)", get_str("Battery Capacity (kWh)")),
+        ])
+
+    # ---------- Environmental Impact ----------
+    section("Environmental Impact")
+    table([
         ("Fossil Fuel Saved (kg)", get_str("total_fossil")),
         ("Trees Saved", get_str("total_trees")),
-        ("CO2 Avoided (t)", get_str("total_co2")),
-    ]
-    add_table(env)
+        ("CO2 Avoided (tons)", get_str("total_co2")),
+    ])
 
-    # --- Footer ---
+    # ---------- Footer ----------
+    pdf.ln(5)
     pdf.set_font("Helvetica", "I", 9)
-    pdf.set_text_color(120, 120, 120)
+    pdf.set_text_color(*GREY)
     pdf.multi_cell(
         0, 5,
-        "Note: Figures are estimates and may vary based on site conditions, weather, and system performance.",
-        align="L"
+        "Note: All figures shown are estimates based on provided inputs. "
+        "Actual savings and performance may vary depending on site conditions, "
+        "weather, and usage behavior."
     )
 
-    # --- Output PDF correctly ---
+    # ---------- Output ----------
     pdf_bytes = pdf.output(dest="S")
-    if isinstance(pdf_bytes, str):  # old FPDF
+    if isinstance(pdf_bytes, str):
         pdf_bytes = pdf_bytes.encode("latin-1")
-    elif isinstance(pdf_bytes, bytearray):  # new FPDF
-        pdf_bytes = bytes(pdf_bytes)
 
     return io.BytesIO(pdf_bytes)
 
@@ -785,7 +806,7 @@ def main():
         st.download_button(
             label="📄 Download Report as PDF",
             data=pdf_buffer,
-            file_name="solar_savings_report.pdf",
+            file_name="Solar_Saving_Report.pdf",
             mime="application/pdf"
         )
 
