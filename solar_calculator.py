@@ -45,7 +45,7 @@ MICROINV_UNITS   = 5.0        # units
 
 
 
-def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7):
+def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7, online_view=False):
     monthly_bill = float(monthly_bill) if monthly_bill else 0.0
 
     # --- Step 1: Tariff selection based on bill ---
@@ -145,6 +145,9 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     else:
         cost_cash = 58000
 
+    ONLINE_BUFFER = 3000 if online_view else 0
+    cost_cash += ONLINE_BUFFER
+
     # --- Step 12: Installments ---
     INTEREST_RATE = 0.08
     INSTALLMENT_YEARS = 4
@@ -239,6 +242,15 @@ def build_pdf(bill, raw_needed, pkg, c):
     def get_str(key):
         return str(c.get(key) or "-")
 
+    # ---------- PDF-only Financial Logic ----------
+    BASE_COST = clean_number(c.get("Total Cost (RM)"))
+    PDF_ESTIMATED_COST = BASE_COST
+
+    MONTHLY_SAVING = clean_number(c.get("Monthly Saving (RM)"))
+    YEARLY_SAVING = MONTHLY_SAVING * 12 if MONTHLY_SAVING else 0
+
+    PDF_ROI_CASH = round(PDF_ESTIMATED_COST / YEARLY_SAVING, 1) if YEARLY_SAVING else "-"
+
     # ---------- PDF Setup ----------
     pdf = FPDF()
     pdf.add_page()
@@ -303,7 +315,7 @@ def build_pdf(bill, raw_needed, pkg, c):
             is_highlight = (label == highlight_label)
 
             pdf.set_font("Helvetica", "B" if is_highlight else "", 11)
-            pdf.set_text_color(0, 0, 0 if is_highlight else 60)
+            pdf.set_text_color(0 if is_highlight else 60)
 
             pdf.cell(120, 8, label)
             pdf.cell(0, 8, value, ln=True, align="C")
@@ -319,7 +331,7 @@ def build_pdf(bill, raw_needed, pkg, c):
         ("Estimated Monthly Consumption (kWh)", get_str("monthly_kwh")),
     ])
 
-    # ---------- System Size Overview (REDESIGNED) ----------
+    # ---------- System Size Overview ----------
     section("System Size Overview")
     summary_block([
         ("System Size", f"{get_str('kwp_installed')} kWp"),
@@ -328,26 +340,42 @@ def build_pdf(bill, raw_needed, pkg, c):
         ("Battery Capacity", f"{get_str('Battery Capacity (kWh)')} kWh" if c.get("include_battery") else "-"),
     ], highlight_label="Solar Panels Installed")
 
-    # ---------- Key Savings Overview (REDESIGNED) ----------
+    # ---------- Key Savings Overview ----------
     section("Key Savings Overview")
     summary_block([
-        ("Estimated Monthly Saving", f"RM {get_str('Monthly Saving (RM)')}"),
-        ("Estimated Yearly Saving", f"RM {get_str('Yearly Saving (RM)')}"),
+        ("Estimated Monthly Saving", f"RM {MONTHLY_SAVING:,.0f}"),
+        ("Estimated Yearly Saving", f"RM {YEARLY_SAVING:,.0f}"),
         ("New Estimated Monthly Bill", f"RM {get_str('new_monthly')}"),
     ], highlight_label="Estimated Monthly Saving")
+
+    # ---------- Financial Details (PDF-only adjusted) ----------
+    section("Financial Details")
+    summary_block([
+        ("Estimated System Price", f"RM {PDF_ESTIMATED_COST:,.0f}"),
+        ("Estimated ROI (Cash Purchase)", f"{PDF_ROI_CASH} years"),
+    ], highlight_label="Estimated System Price")
+
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_text_color(*GREY)
+    pdf.multi_cell(
+        0, 5,
+        "Pricing shown is an estimated budgetary figure for preliminary assessment only. "
+        "Final system price and return on investment will be confirmed after site survey "
+        "and detailed engineering design."
+    )
+    pdf.set_text_color(*TEXT)
+    pdf.ln(40)
 
     # ---------- Key Metrics ----------
     section("Key Metrics")
     table([
-        ("Monthly Generation (kWh)", get_str("monthly_gen_kwh")),
-        ("Daytime Saving (kWh/day)", get_str("Daytime Saving (kWh)")),
-        ("Daily Saving (RM)", get_str("Daily Saving (RM)")),
-        ("Monthly Saving (RM)", get_str("Monthly Saving (RM)")),
-        ("Yearly Saving (RM)", get_str("Yearly Saving (RM)")),
-        ("New Monthly Bill (RM)", get_str("new_monthly")),
+        ("Estimated Monthly Generation (kWh)", get_str("monthly_gen_kwh")),
+        ("Estimated Daytime Saving (kWh/day)", get_str("Daytime Saving (kWh)")),
+        ("Estimated Daily Saving (RM)", get_str("Daily Saving (RM)")),
+        ("Estimated Monthly Saving (RM)", get_str("Monthly Saving (RM)")),
+        ("Estimated Yearly Saving (RM)", get_str("Yearly Saving (RM)")),
+        ("Estimated New Monthly Bill (RM)", get_str("new_monthly")),
     ])
-
-    pdf.ln(15)
 
     # ---------- Solar System Details ----------
     section("Solar System Details")
@@ -542,6 +570,23 @@ def main():
             help=f"Recommended to slightly exceed your RM {bill:.0f} monthly usage ({est_kwh:.0f} kWh)."
         )
 
+        # --- Proposal Mode ---
+        st.subheader("📄 Proposal Mode")
+
+        online_view = st.checkbox(
+            "Online View (+3000 on the total cost)",
+            value=False,
+            help="Online enquiries include an estimation buffer. Final price will be confirmed after site survey."
+        )
+
+        st.session_state.online_view = online_view
+
+        # --- Online estimation buffer ---
+        ONLINE_BUFFER = 3000 if st.session_state.get("online_view", True) else 0
+
+        # --- Battery Mode ---
+        st.subheader("🔋 Battery Mode")
+
         # --- Battery option ---
         include_battery = st.checkbox("🔋 Include Battery Storage?", value=st.session_state.get("include_battery", False))
         st.session_state.include_battery = include_battery
@@ -643,6 +688,10 @@ def main():
         estimated_saving_rm = max(bill - final_new_bill_rm, 0)
 
         # --- Step 12: Summary ---
+
+        # --- Overview ---
+        st.subheader("📄 Overview")
+
         st.success(
             f"""
             💰 **Estimated Monthly Saving:** RM {estimated_saving_rm:,.2f}  
@@ -661,7 +710,7 @@ def main():
         )
 
         # --- Your calculate_values integration ---
-        c = calculate_values(pkg, sunlight_hours if sunlight_hours else 3.5, bill, daytime_option)
+        c = calculate_values(pkg, sunlight_hours if sunlight_hours else 3.5, bill, daytime_option, online_view=st.session_state.get("online_view", True))
 
         if include_battery:
             # Parsing helper
@@ -674,7 +723,7 @@ def main():
             cost_cash_val = parse_float(c.get("Total Cost (RM)", 0))
             battery_price_val = float(battery_price) if include_battery else 0
 
-            total_cost_with_battery = cost_cash_val + battery_price_val
+            total_cost_with_battery = cost_cash_val + battery_price_val + ONLINE_BUFFER
 
             interest_rate = 0.08
             months = 48
