@@ -25,23 +25,23 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# --- Constants ---
-PANEL_WATT = 640
+# # --- Constants ---
+# PANEL_WATT = 640
 GENERAL_TARIFF = 1
-TARIFF_ENERGY = 1
-DAILY_USAGE_RATIO = 0.7  # 70% daytime usage
-INTEREST_RATE = 0.08
-INSTALLMENT_YEARS = 4
+# TARIFF_ENERGY = 1
+# DAILY_USAGE_RATIO = 0.7  # 70% daytime usage
+# INTEREST_RATE = 0.08
+# INSTALLMENT_YEARS = 4
 
-ENERGY_CHARGE_RATIO = 0.6  # 60% of monthly bill is energy charge
+# ENERGY_CHARGE_RATIO = 0.6  # 60% of monthly bill is energy charge
 
-PRICE_TABLE = {
-    10: 17000,  # 10 panels
-    20: 28000   # 20 panels
-}
+# PRICE_TABLE = {
+#     10: 18000,  # 10 panels
+#     20: 29000   # 20 panels
+# }
 
-O_AND_M_PER_YEAR = 800        # RM/year
-MICROINV_UNITS   = 5.0        # units
+# O_AND_M_PER_YEAR = 800        # RM/year
+# MICROINV_UNITS   = 5.0        # units
 
 
 
@@ -83,7 +83,7 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
     if raw_needed % 2 != 0:
         raw_needed += 1
 
-    recommended = max(min(raw_needed, 200), 10)
+    recommended = max(min(raw_needed, 20000), 10000)
 
     # --- Step 7: System yield ---
     kwp = no_panels * PANEL_WATT / 1000
@@ -137,11 +137,11 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
 
     # --- Step 11: Cost tiers ---
     if no_panels < 10:
-        cost_cash = 17000
+        cost_cash = 18000
     elif 10 <= no_panels <= 17:
-        cost_cash = 17000 + (no_panels - 10) * 1000
+        cost_cash = 18000 + (no_panels - 10) * 1000
     elif no_panels >= 18:
-        cost_cash = 26000 + (no_panels - 18) * 1000
+        cost_cash = 27000 + (no_panels - 18) * 1000
     else:
         cost_cash = 58000
 
@@ -411,6 +411,50 @@ def build_pdf(bill, raw_needed, pkg, c):
         "weather, and usage behavior."
     )
 
+    final_image_path = os.path.join(
+        os.path.dirname(__file__),
+        "assets",
+        "closing_page.png"
+    )
+
+    if os.path.exists(final_image_path):
+        from PIL import Image
+        pdf.add_page()
+
+        # A4 size in mm
+        PAGE_W, PAGE_H = 210, 297
+
+        # Get image size
+        img = Image.open(final_image_path)
+        img_w_px, img_h_px = img.size
+        img_ratio = img_w_px / img_h_px
+
+        # Decide max size (fit within page)
+        max_w = 210
+        max_h = 297
+
+        if max_w / max_h > img_ratio:
+            img_h = max_h
+            img_w = img_h * img_ratio
+        else:
+            img_w = max_w
+            img_h = img_w / img_ratio
+
+        # Center position
+        x = (PAGE_W - img_w) / 2
+        y = (PAGE_H - img_h) / 2
+
+        pdf.image(final_image_path, x=x, y=y, w=img_w, h=img_h)
+
+        def draw_page_background(pdf, color):
+            pdf.set_fill_color(*color)
+            pdf.rect(0, 0, 210, 297, style="F")  # A4 size in mm
+
+        LIGHT_GREEN_BG = (235, 245, 235)  # RGB
+        draw_page_background(pdf, LIGHT_GREEN_BG)
+
+        
+
     # ---------- Output ----------
     pdf_bytes = pdf.output(dest="S")
     if isinstance(pdf_bytes, str):
@@ -548,7 +592,7 @@ def main():
             raw_needed += 1
 
         # Keep within 10–100 range
-        recommended = min(max(raw_needed, 10), 200)
+        recommended = min(max(raw_needed, 10), 100000)
 
         # Reset slider if sunlight changed
         if "last_sunlight" not in st.session_state or st.session_state.last_sunlight != sunlight_hours:
