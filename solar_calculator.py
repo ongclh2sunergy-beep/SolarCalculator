@@ -137,13 +137,13 @@ def calculate_values(no_panels, sunlight_hours, monthly_bill, daytime_option=0.7
 
     # --- Step 11: Cost tiers ---
     if no_panels < 10:
-        cost_cash = 18000
+        cost_cash = 20000
     elif 10 <= no_panels <= 17:
-        cost_cash = 18000 + (no_panels - 10) * 1000
+        cost_cash = 20000 + (no_panels - 10) * 1000
     elif no_panels >= 18:
-        cost_cash = 27000 + (no_panels - 18) * 1000
+        cost_cash = 29000 + (no_panels - 18) * 1000
     else:
-        cost_cash = 58000
+        cost_cash = 60000
 
     ONLINE_BUFFER = 3000 if online_view else 0
     cost_cash += ONLINE_BUFFER
