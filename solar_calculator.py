@@ -349,22 +349,23 @@ def build_pdf(bill, raw_needed, pkg, c):
     ], highlight_label="Estimated Monthly Saving")
 
     # ---------- Financial Details (PDF-only adjusted) ----------
-    section("Financial Details")
-    summary_block([
-        ("Estimated System Price", f"RM {PDF_ESTIMATED_COST:,.0f}"),
-        ("Estimated ROI (Cash Purchase)", f"{PDF_ROI_CASH} years"),
-    ], highlight_label="Estimated System Price")
+    # section("Financial Details")
+    # summary_block([
+    #     ("Estimated System Price", f"RM {PDF_ESTIMATED_COST:,.0f}"),
+    #     ("Estimated ROI (Cash Purchase)", f"{PDF_ROI_CASH} years"),
+    # ], highlight_label="Estimated System Price")
 
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.set_text_color(*GREY)
-    pdf.multi_cell(
-        0, 5,
-        "Pricing shown is an estimated budgetary figure for preliminary assessment only. "
-        "Final system price and return on investment will be confirmed after site survey "
-        "and detailed engineering design."
-    )
-    pdf.set_text_color(*TEXT)
+    # pdf.set_font("Helvetica", "I", 9)
+    # pdf.set_text_color(*GREY)
+    # pdf.multi_cell(
+    #     0, 5,
+    #     "Pricing shown is an estimated budgetary figure for preliminary assessment only. "
+    #     "Final system price and return on investment will be confirmed after site survey "
+    #     "and detailed engineering design."
+    # )
+    # pdf.set_text_color(*TEXT)
     pdf.ln(40)
+    pdf.ln(60)
 
     # ---------- Key Metrics ----------
     section("Key Metrics")
