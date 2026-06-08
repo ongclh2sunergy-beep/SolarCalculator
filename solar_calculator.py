@@ -1,5 +1,6 @@
 import math
 import streamlit as st
+from PIL import Image
 
 # --- page-wide light yellow background ---
 st.markdown(
@@ -349,21 +350,21 @@ def build_pdf(bill, raw_needed, pkg, c):
     ], highlight_label="Estimated Monthly Saving")
 
     # ---------- Financial Details (PDF-only adjusted) ----------
-    # section("Financial Details")
-    # summary_block([
-    #     ("Estimated System Price", f"RM {PDF_ESTIMATED_COST:,.0f}"),
-    #     ("Estimated ROI (Cash Purchase)", f"{PDF_ROI_CASH} years"),
-    # ], highlight_label="Estimated System Price")
+    section("Financial Details")
+    summary_block([
+        ("Estimated System Price", f"RM {PDF_ESTIMATED_COST:,.0f}"),
+        ("Estimated ROI (Cash Purchase)", f"{PDF_ROI_CASH} years"),
+    ], highlight_label="Estimated System Price")
 
-    # pdf.set_font("Helvetica", "I", 9)
-    # pdf.set_text_color(*GREY)
-    # pdf.multi_cell(
-    #     0, 5,
-    #     "Pricing shown is an estimated budgetary figure for preliminary assessment only. "
-    #     "Final system price and return on investment will be confirmed after site survey "
-    #     "and detailed engineering design."
-    # )
-    # pdf.set_text_color(*TEXT)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.set_text_color(*GREY)
+    pdf.multi_cell(
+        0, 5,
+        "Pricing shown is an estimated budgetary figure for preliminary assessment only. "
+        "Final system price and return on investment will be confirmed after site survey "
+        "and detailed engineering design."
+    )
+    pdf.set_text_color(*TEXT)
     pdf.ln(40)
     pdf.ln(60)
 
@@ -412,47 +413,63 @@ def build_pdf(bill, raw_needed, pkg, c):
         "weather, and usage behavior."
     )
 
+    # ==========================================
+    # Closing Page (Full Page Image)
+    # ==========================================
     final_image_path = os.path.join(
-        os.path.dirname(__file__),
+        os.path.dirname(os.path.abspath(__file__)),
         "assets",
         "closing_page.png"
     )
 
     if os.path.exists(final_image_path):
-        from PIL import Image
+
+        # Add new page
         pdf.add_page()
 
-        # A4 size in mm
-        PAGE_W, PAGE_H = 210, 297
+        # PDF page size
+        PAGE_W = pdf.w
+        PAGE_H = pdf.h
 
-        # Get image size
+        # Read image size
         img = Image.open(final_image_path)
         img_w_px, img_h_px = img.size
+
         img_ratio = img_w_px / img_h_px
+        page_ratio = PAGE_W / PAGE_H
 
-        # Decide max size (fit within page)
-        max_w = 210
-        max_h = 297
-
-        if max_w / max_h > img_ratio:
-            img_h = max_h
+        # Scale image to completely cover page
+        if img_ratio > page_ratio:
+            # Image is wider than page
+            img_h = PAGE_H
             img_w = img_h * img_ratio
+            x = -(img_w - PAGE_W) / 2
+            y = 0
         else:
-            img_w = max_w
+            # Image is taller than page
+            img_w = PAGE_W
             img_h = img_w / img_ratio
+            x = 0
+            y = -(img_h - PAGE_H) / 2
 
-        # Center position
-        x = (PAGE_W - img_w) / 2
-        y = (PAGE_H - img_h) / 2
+        # Draw image
+        pdf.image(
+            final_image_path,
+            x=x,
+            y=y,
+            w=img_w,
+            h=img_h
+        )
 
-        pdf.image(final_image_path, x=x, y=y, w=img_w, h=img_h)
+    else:
+        print(f"Closing image not found: {final_image_path}")
 
-        def draw_page_background(pdf, color):
-            pdf.set_fill_color(*color)
-            pdf.rect(0, 0, 210, 297, style="F")  # A4 size in mm
+    # def draw_page_background(pdf, color):
+    #     pdf.set_fill_color(*color)
+    #     pdf.rect(0, 0, 248, 352, style="F")  # A4 size in mm
 
-        LIGHT_GREEN_BG = (235, 245, 235)  # RGB
-        draw_page_background(pdf, LIGHT_GREEN_BG)
+    # LIGHT_GREEN_BG = (235, 245, 235)  # RGB
+    # draw_page_background(pdf, LIGHT_GREEN_BG)
 
         
 
